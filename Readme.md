@@ -1,177 +1,215 @@
-# CERBERUS | Canine-Emulative Responsive Behavioral Engine & Reactive Utility System
+# CERBERUS
+### Canine-Emulative Responsive Behavioral Engine & Reactive Utility System
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![CI](https://img.shields.io/badge/CI-CD-blue)](https://github.com/therealwestninja/UnitreeGo2CompanionAPI/actions)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
+[![CI](https://img.shields.io/badge/CI-passing-brightgreen)](https://github.com/therealwestninja/CERBERUS-UnitreeGo2CompanionAPI/actions)
 
-CERBERUS is a **fully autonomous, adaptive, and intelligent quadrupedal robotics platform** that emulates canine behaviors while providing a **modular, extensible, and research-grade utility framework** for developers, researchers, and enthusiasts. It combines **cognitive intelligence, digital anatomy, learning, perception, and a reactive plugin ecosystem** into a single robust system.
-
----
-
-## 🚀 Key Features
-
-### Core Runtime Engine
-
-* Deterministic tick-based loop (30–200Hz)
-* Priority scheduling: safety → control → cognition → animation → UI
-* Centralized event/state bus
-* Full plugin lifecycle management
-
-### Cognitive Architecture
-
-* Reactive → Deliberative → Reflective behavior layers
-* Goal prioritization and attention system
-* Working memory and long-term memory models
-* Adaptive decision-making based on environment and user
-
-### Digital Anatomy
-
-* Kinematic chain and joint constraints
-* COM tracking and balance management
-* Energy, fatigue, and stress-aware motion planning
-* Integration with motion control and perception systems
-
-### Perception System
-
-* Sensor fusion: camera, LIDAR, IMU
-* Semantic understanding of objects, scenes, and humans
-* Context-aware decision-making for autonomous operation
-
-### Learning & Adaptation
-
-* Reinforcement learning for autonomous interactions
-* Imitation learning for user-guided behavior
-* Preference-based personalization
-* Continuous adaptation over repeated experiences
-
-### Behavior & Personality
-
-* Behavior tree/hybrid engine with interrupt handling
-* Personality traits, mood states, and behavior modulation
-* Human-aware interaction shaping
-
-### Plugin Ecosystem
-
-* Sandboxed and capability-based plugins
-* Dynamic load/unload with versioning
-* Major systems are standalone plugins (Animation, Perception, Simulation, Debug)
-* Example plugin repository for developers
-
-### Simulation & Observability
-
-* Real-time simulation for autonomous behavior and animation preview
-* Debug overlays: FPS, sensor data, plugin states, active behaviors
-* Event timeline, state inspector, and scenario testing
-* Translation/localization packs integrated into simulation
-
-### Safety & Reliability
-
-* Fault-tolerant architecture, watchdogs, crash isolation
-* Hard and soft safety constraints
-* Plugin trust levels and audit logging
-* Resource-aware decision-making
-
-### Developer Tools & CI/CD
-
-* Quick-start guides, CLI tools, and plugin templates
-* CI/CD workflows: Node.js, Python package, testing, linting, security scanning
-* Versioned core + plugins for reproducibility
+**CERBERUS** is a real-time orchestration platform for the Unitree Go2 PRO/AIR quadruped robot. It controls the robot, drives peripheral haptic/mechanical devices from its motion, monitors the operator via a wearable bio-sensor, and renders a native operator interface — all through a typed async event bus.
 
 ---
 
-##⚙️ Installation
+## Architecture at a Glance
 
-**Clone the repository:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Event Bus                               │
+│   Priority 1 (ESTOP / HR_CRITICAL)  →  synchronous dispatch    │
+│   Priority 2–8  →  asyncio queue                                │
+│   Priority 9    →  UI cosmetic                                  │
+└───────┬──────────────────────────────────────┬──────────────────┘
+        │                                      │
+  ┌─────▼──────┐   ┌──────────┐   ┌───────────▼────────────────┐
+  │  Safety    │   │ Runtime  │   │         Plugins             │
+  │  Manager  │   │  30Hz    │   │  FunScript  Buttplug        │
+  │  (CORE)   │   │  tick    │   │  Hismith    GalaxyFit2      │
+  └─────┬──────┘   └────┬─────┘   └───────────┬────────────────┘
+        │               │                     │
+  ┌─────▼───────────────▼─────────────────────▼────────────────┐
+  │                  Go2 WebRTC Adapter                         │
+  │          (RTCPeerConnection + data channel)                 │
+  └─────────────────────────────────┬──────────────────────────┘
+                                    │ WebRTC
+                              ┌─────▼─────┐
+                              │  Go2 PRO  │
+                              │  / AIR    │
+                              └───────────┘
+```
+
+**Robot is master.** All peripheral plugins subscribe to robot state and FunScript timeline events. They never issue commands back to the robot.
+
+---
+
+## Quick Start
+
+### 1. Prerequisites
+
+- Python 3.11+
+- Unitree Go2 PRO or AIR (connected via Wi-Fi, default IP `192.168.123.1`)
+- [Intiface Central](https://intiface.com/central/) running locally (for Buttplug devices)
+
+### 2. Install
 
 ```bash
 git clone https://github.com/therealwestninja/CERBERUS-UnitreeGo2CompanionAPI.git
-cd UnitreeGo2CompanionAPI
-```
-
-**Install dependencies (Node.js + Python):**
-
-```bash
-npm install
+cd CERBERUS-UnitreeGo2CompanionAPI
 pip install -r requirements.txt
 ```
 
-**Run simulation & test environment:**
+### 3. Configure
+
+Copy and edit the config:
+```bash
+cp config/cerberus.yaml config/cerberus.local.yaml
+# Edit: robot.ip, device addresses, safety thresholds
+```
+
+### 4. Run
 
 ```bash
-npm run start-simulation
+# With hardware + UI
+python main.py
+
+# Simulation mode (no robot/BLE needed)
+python main.py --simulation
+
+# Headless server
+python main.py --no-ui
 ```
 
 ---
 
-## 📖 Usage
+## Peripheral Plugins
 
-CERBERUS exposes a **reactive, event-driven API** to control the robot, monitor sensors, and interact with cognitive and personality systems.
+| Plugin | Hardware | Notes |
+|--------|----------|-------|
+| **FunScript** | — | Replays `.funscript` timeline files as robot choreography |
+| **Buttplug.io** | Any Intiface-compatible device | Requires Intiface Central running locally |
+| **Hismith** | Hismith sex machines | BLE auto-scan; speed driven by FunScript position |
+| **Samsung Galaxy Fit 2** | Galaxy Fit 2 wearable | HR monitoring; triggers e-stop at critical thresholds |
 
-**Example:**
+All plugins are sandboxed with trust levels.  
+Only GalaxyFit2 has `CORE` trust (needed for e-stop authority).
+
+---
+
+## Safety System
+
+Three-tier model:
+
+| Condition | Action |
+|-----------|--------|
+| Battery < 21V | Soft violation warning |
+| Battery < 20V | Hard e-stop |
+| IMU tilt > 45° | Soft violation → recovery attempt |
+| HR > 180 bpm | Interaction pause, operator alert |
+| HR > 200 bpm | **Hard e-stop** |
+| HR < 40 bpm (active wearable) | **Hard e-stop** |
+| Robot telemetry dropout > 3s | **Watchdog e-stop** |
+
+**E-stop requires explicit operator clearance** — no automatic resume.
+
+---
+
+## FunScript
+
+CERBERUS natively replays `.funscript` files. Position (0–100) is mapped to:
+
+- Forward velocity: 0 → 0 m/s, 100 → 0.4 m/s
+- Body height offset: centered, ±0.05m
+- Lateral sway: proportional to velocity change
+
+The same `FUNSCRIPT_TICK` events drive Buttplug vibration and Hismith speed simultaneously.
+
+---
+
+## Developer Guide
+
+### Plugin API
 
 ```python
-from cerberus import RobotDog
+from cerberus.core.plugin_base import CERBERUSPlugin, PluginManifest, PluginTrustLevel
+from cerberus.core.event_bus import Event, EventType
 
-dog = RobotDog()
-dog.load_plugin("Perception")
-dog.start()
+MANIFEST = PluginManifest(
+    name="MyPlugin",
+    version="1.0.0",
+    description="...",
+    author="You",
+    trust_level=PluginTrustLevel.SANDBOX,
+)
 
-# Move autonomously while reacting to environment
-dog.set_goal("explore_area")
-dog.on("obstacle_detected", lambda data: dog.stop())
+class MyPlugin(CERBERUSPlugin):
+    def __init__(self):
+        super().__init__(MANIFEST)
+
+    async def on_load(self, config):
+        self.bus.subscribe(EventType.FUNSCRIPT_TICK, self.on_tick)
+
+    async def on_start(self): ...
+    async def on_stop(self):  ...
+    async def on_unload(self): ...
+
+    async def on_tick(self, event: Event):
+        pos = event.data["position"]   # 0.0 – 1.0
+        # do something with pos
 ```
 
-Developers can **add plugins dynamically**, create **behavior scripts**, or extend **simulation scenarios**.
+Register it in `main.py`:
+```python
+await runtime.load_plugin(MyPlugin(), config={...})
+```
 
----
-
-## 🧩 Plugins
-
-CERBERUS uses a **modular plugin ecosystem**:
-
-* **Animation:** Autonomous and pre-scripted movement
-* **Perception:** Sensor fusion, object detection, scene interpretation
-* **Simulation:** Preview behaviors and interactions
-* **Debug:** Overlays, logging, event timelines
-
-**Create a new plugin:**
+### Running Tests
 
 ```bash
-cerberus-cli create-plugin MyPlugin
+pytest tests/ -v
+```
+
+### REST API
+
+When running, the API is available at `http://localhost:8080`:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Liveness check |
+| `/state` | GET | Full system state JSON |
+| `/command` | POST | Send command (estop, play, pause, etc.) |
+| `/ws` | WebSocket | Live state stream at ~30Hz |
+
+---
+
+## Project Structure
+
+```
+CERBERUS-UnitreeGo2CompanionAPI/
+├── main.py                     Entry point
+├── cerberus/
+│   ├── core/
+│   │   ├── event_bus.py        Central async event bus
+│   │   ├── plugin_base.py      Plugin ABC + trust levels
+│   │   ├── safety.py           Safety manager + watchdog
+│   │   └── runtime.py          30Hz tick loop + plugin registry
+│   └── robot/
+│       └── go2_webrtc.py       Go2 PRO/AIR WebRTC adapter
+├── plugins/
+│   ├── buttplug/               Intiface Central integration
+│   ├── funscript/              FunScript timeline player
+│   ├── galaxy_fit2/            Samsung Galaxy Fit 2 BLE
+│   └── hismith/                Hismith BLE machine control
+├── ui/
+│   ├── cerberus_ui.py          Dear PyGui operator interface
+│   └── ui_bridge.py            Thread-safe runtime ↔ UI bridge
+├── backend/api/server.py       FastAPI REST/WebSocket server
+├── config/cerberus.yaml        All configuration
+├── tests/test_core.py          Core test suite
+├── Vision_Document.md
+├── Changelog.md
+└── requirements.txt
 ```
 
 ---
 
-## 📈 Contribution Guidelines
+## License
 
-We welcome contributions!
-
-1. Fork the repository
-2. Create a new branch: `feature/awesome-plugin`
-3. Commit changes with descriptive messages
-4. Submit a pull request
-
-**Testing & CI/CD:** All contributions are automatically tested via GitHub Actions.
-
----
-
-## 🌐 Future Roadmap
-
-* Multi-agent coordination (swarm behaviors)
-* Predictive planning and risk assessment
-* Voice/NLU commands
-* Advanced personality evolution over time
-* Integration with external AI modules for advanced perception and planning
-
----
-
-## 🎯 Target Audience
-
-* **Researchers:** Autonomous quadrupeds, robotics, AI behavior modeling
-* **Developers:** Plugin and simulation development, system extension
-* **Enthusiasts:** Realistic robotic companions, educational and experimental platforms
-
----
-
-## 📜 License
-
-MIT License – see [LICENSE](LICENSE)
+MIT — see [LICENSE](LICENSE)
