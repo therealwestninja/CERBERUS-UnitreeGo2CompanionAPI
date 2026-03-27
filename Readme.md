@@ -1,215 +1,310 @@
-# CERBERUS
-### Canine-Emulative Responsive Behavioral Engine & Reactive Utility System
+# CERBERUS | Canine-Emulative Responsive Behavioral Engine & Reactive Utility System
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
-[![CI](https://img.shields.io/badge/CI-passing-brightgreen)](https://github.com/therealwestninja/CERBERUS-UnitreeGo2CompanionAPI/actions)
+[![CI](https://img.shields.io/badge/CI-CD-blue)](https://github.com/therealwestninja/CERBERUS-UnitreeGo2CompanionAPI/actions)
+[![Version](https://img.shields.io/badge/version-2.1.0-orange)](Changelog.md)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
 
-**CERBERUS** is a real-time orchestration platform for the Unitree Go2 PRO/AIR quadruped robot. It controls the robot, drives peripheral haptic/mechanical devices from its motion, monitors the operator via a wearable bio-sensor, and renders a native operator interface — all through a typed async event bus.
+CERBERUS is a **fully autonomous, adaptive, and intelligent quadrupedal robotics platform** for the **Unitree Go2**. It combines a **three-layer cognitive engine**, **digital anatomy model**, **perception pipeline**, **safety watchdog**, and a **sandboxed plugin ecosystem** into a single, research-grade system.
 
----
-
-## Architecture at a Glance
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Event Bus                               │
-│   Priority 1 (ESTOP / HR_CRITICAL)  →  synchronous dispatch    │
-│   Priority 2–8  →  asyncio queue                                │
-│   Priority 9    →  UI cosmetic                                  │
-└───────┬──────────────────────────────────────┬──────────────────┘
-        │                                      │
-  ┌─────▼──────┐   ┌──────────┐   ┌───────────▼────────────────┐
-  │  Safety    │   │ Runtime  │   │         Plugins             │
-  │  Manager  │   │  30Hz    │   │  FunScript  Buttplug        │
-  │  (CORE)   │   │  tick    │   │  Hismith    GalaxyFit2      │
-  └─────┬──────┘   └────┬─────┘   └───────────┬────────────────┘
-        │               │                     │
-  ┌─────▼───────────────▼─────────────────────▼────────────────┐
-  │                  Go2 WebRTC Adapter                         │
-  │          (RTCPeerConnection + data channel)                 │
-  └─────────────────────────────────┬──────────────────────────┘
-                                    │ WebRTC
-                              ┌─────▼─────┐
-                              │  Go2 PRO  │
-                              │  / AIR    │
-                              └───────────┘
-```
-
-**Robot is master.** All peripheral plugins subscribe to robot state and FunScript timeline events. They never issue commands back to the robot.
+> **Simulation mode** — no robot required. Set `GO2_SIMULATION=true` and everything works.
 
 ---
 
-## Quick Start
+## 🧠 Architecture
 
-### 1. Prerequisites
+```
+CERBERUS Engine (asyncio, 30–200Hz)
+│
+├── Safety Watchdog    ← Heartbeat, tilt, battery, E-stop
+├── Behavior Engine    ← 3-layer BT: Reactive/Deliberative/Reflective
+├── Digital Anatomy    ← 12-DOF kinematics, COM, fatigue, energy
+├── Perception         ← YOLOv8 camera, sensor fusion (plugin)
+├── Plugin System      ← Sandboxed, capability-gated, auto-discovered
+│
+└── Go2 Bridge
+    ├── RealBridge     ← CycloneDDS / unitree_sdk2_python (real hardware)
+    └── SimBridge      ← Full simulation (no hardware)
+```
 
-- Python 3.11+
-- Unitree Go2 PRO or AIR (connected via Wi-Fi, default IP `192.168.123.1`)
-- [Intiface Central](https://intiface.com/central/) running locally (for Buttplug devices)
+---
 
-### 2. Install
+## 🚀 Quick Start
+
+### Simulation (no robot required)
 
 ```bash
 git clone https://github.com/therealwestninja/CERBERUS-UnitreeGo2CompanionAPI.git
 cd CERBERUS-UnitreeGo2CompanionAPI
 pip install -r requirements.txt
+
+cp .env.example .env
+# Edit .env: GO2_SIMULATION=true
+
+cerberus
+# → http://localhost:8080
 ```
 
-### 3. Configure
-
-Copy and edit the config:
-```bash
-cp config/cerberus.yaml config/cerberus.local.yaml
-# Edit: robot.ip, device addresses, safety thresholds
-```
-
-### 4. Run
+### Real Hardware
 
 ```bash
-# With hardware + UI
-python main.py
+# 1. Build CycloneDDS 0.10.x
+git clone https://github.com/eclipse-cyclonedds/cyclonedds -b releases/0.10.x
+cd cyclonedds && mkdir build install && cd build
+cmake .. -DCMAKE_INSTALL_PREFIX=../install
+cmake --build . --target install
 
-# Simulation mode (no robot/BLE needed)
-python main.py --simulation
+# 2. Install unitree_sdk2_python
+git clone https://github.com/unitreerobotics/unitree_sdk2_python.git
+cd unitree_sdk2_python
+export CYCLONEDDS_HOME=~/cyclonedds/install
+pip install -e .
 
-# Headless server
-python main.py --no-ui
+# 3. Configure CERBERUS
+cp .env.example .env
+# Set: GO2_SIMULATION=false
+# Set: GO2_NETWORK_INTERFACE=eth0  ← your interface name
+
+# 4. Connect to Go2
+# Wire Ethernet, check: ping 192.168.123.161
+
+# 5. Launch
+cerberus
 ```
 
 ---
 
-## Peripheral Plugins
+## ⚙️ Configuration (`.env`)
 
-| Plugin | Hardware | Notes |
-|--------|----------|-------|
-| **FunScript** | — | Replays `.funscript` timeline files as robot choreography |
-| **Buttplug.io** | Any Intiface-compatible device | Requires Intiface Central running locally |
-| **Hismith** | Hismith sex machines | BLE auto-scan; speed driven by FunScript position |
-| **Samsung Galaxy Fit 2** | Galaxy Fit 2 wearable | HR monitoring; triggers e-stop at critical thresholds |
+```bash
+# Robot
+GO2_SIMULATION=true            # true = no hardware needed
+GO2_NETWORK_INTERFACE=eth0     # Ethernet interface to Go2 (real mode)
 
-All plugins are sandboxed with trust levels.  
-Only GalaxyFit2 has `CORE` trust (needed for e-stop authority).
+# API
+GO2_API_HOST=0.0.0.0
+GO2_API_PORT=8080
 
----
+# Engine
+CERBERUS_HZ=60                 # Tick rate (30–200)
+HEARTBEAT_TIMEOUT=5.0          # Seconds before auto-stop
 
-## Safety System
+# Personality
+PERSONALITY_ENERGY=0.7
+PERSONALITY_FRIENDLINESS=0.8
+PERSONALITY_CURIOSITY=0.6
+PERSONALITY_LOYALTY=0.9
+PERSONALITY_PLAYFULNESS=0.65
 
-Three-tier model:
+# Plugins
+PLUGIN_DIRS=plugins            # Colon-separated list
+PLUGIN_MAX_ERRORS=5            # Disable plugin after this many consecutive errors
 
-| Condition | Action |
-|-----------|--------|
-| Battery < 21V | Soft violation warning |
-| Battery < 20V | Hard e-stop |
-| IMU tilt > 45° | Soft violation → recovery attempt |
-| HR > 180 bpm | Interaction pause, operator alert |
-| HR > 200 bpm | **Hard e-stop** |
-| HR < 40 bpm (active wearable) | **Hard e-stop** |
-| Robot telemetry dropout > 3s | **Watchdog e-stop** |
-
-**E-stop requires explicit operator clearance** — no automatic resume.
-
----
-
-## FunScript
-
-CERBERUS natively replays `.funscript` files. Position (0–100) is mapped to:
-
-- Forward velocity: 0 → 0 m/s, 100 → 0.4 m/s
-- Body height offset: centered, ±0.05m
-- Lateral sway: proportional to velocity change
-
-The same `FUNSCRIPT_TICK` events drive Buttplug vibration and Hismith speed simultaneously.
+# Logging
+LOG_LEVEL=INFO
+CERBERUS_AUDIT_LOG=logs/safety_audit.jsonl
+```
 
 ---
 
-## Developer Guide
+## 📡 API Reference
 
-### Plugin API
+### REST Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/` | System status, engine state |
+| `GET` | `/state` | Full robot state snapshot |
+| `GET` | `/stats` | Engine performance metrics |
+| `GET` | `/anatomy` | Joints, COM, energy, fatigue |
+| `GET` | `/behavior` | Cognitive engine status |
+| `GET` | `/plugins` | Loaded plugin list |
+| `GET` | `/safety/events` | Safety audit log |
+| `POST` | `/safety/estop` | Trigger emergency stop |
+| `POST` | `/safety/clear_estop` | Clear E-stop (sim only) |
+| `POST` | `/motion/stand_up` | |
+| `POST` | `/motion/stand_down` | |
+| `POST` | `/motion/stop` | Stop all motion |
+| `POST` | `/motion/move` | `{"vx", "vy", "vyaw"}` |
+| `POST` | `/motion/sport_mode` | `{"mode": "hello"}` — all 17 modes |
+| `POST` | `/motion/body_height` | `{"height": 0.05}` — relative offset |
+| `POST` | `/motion/euler` | `{"roll", "pitch", "yaw"}` |
+| `POST` | `/motion/gait` | `{"gait_id": 0–4}` |
+| `POST` | `/motion/foot_raise` | `{"height": 0.0}` |
+| `POST` | `/motion/speed_level` | `{"level": -1/0/1}` |
+| `POST` | `/motion/continuous_gait` | `{"enabled": true}` |
+| `POST` | `/led` | `{"r", "g", "b"}` |
+| `POST` | `/volume` | `{"level": 0–100}` |
+| `POST` | `/obstacle_avoidance` | `{"enabled": true}` |
+| `POST` | `/behavior/goal` | `{"name", "priority", "params"}` |
+| `POST` | `/plugins/{name}/enable` | |
+| `POST` | `/plugins/{name}/disable` | |
+| `DELETE` | `/plugins/{name}` | Unload plugin |
+
+### WebSocket `/ws`
 
 ```python
-from cerberus.core.plugin_base import CERBERUSPlugin, PluginManifest, PluginTrustLevel
-from cerberus.core.event_bus import Event, EventType
+import asyncio, websockets, json
+
+async def main():
+    async with websockets.connect("ws://localhost:8080/ws") as ws:
+        # Receive state at 30Hz
+        async for msg in ws:
+            data = json.loads(msg)
+            if data["type"] == "state":
+                print(data["data"]["battery"])
+
+        # Send commands
+        await ws.send(json.dumps({"cmd": "move", "vx": 0.3, "vy": 0, "vyaw": 0}))
+        await ws.send(json.dumps({"cmd": "sport_mode", "mode": "hello"}))
+        await ws.send(json.dumps({"cmd": "estop"}))
+```
+
+### Python SDK Example
+
+```python
+import asyncio
+from cerberus.bridge.go2_bridge import create_bridge, SportMode
+from cerberus.core.engine import CerberusEngine
+from cerberus.core.safety import SafetyWatchdog, SafetyLimits
+from cerberus.cognitive.behavior_engine import BehaviorEngine
+
+async def main():
+    bridge   = create_bridge()     # SimBridge if GO2_SIMULATION=true
+    watchdog = SafetyWatchdog(bridge, SafetyLimits())
+    engine   = CerberusEngine(bridge, watchdog, target_hz=60)
+
+    engine.behavior_engine = BehaviorEngine(bridge)
+
+    await engine.start()
+
+    # Motion
+    await bridge.stand_up()
+    await bridge.move(0.3, 0.0, 0.0)
+    await asyncio.sleep(3)
+    await bridge.stop_move()
+
+    # Sport modes
+    await bridge.execute_sport_mode(SportMode.HELLO)
+    await bridge.execute_sport_mode(SportMode.DANCE1)
+
+    await engine.stop()
+
+asyncio.run(main())
+```
+
+---
+
+## 🔌 Writing a Plugin
+
+```python
+# plugins/my_plugin/plugin.py
+from cerberus.plugins.plugin_manager import CerberusPlugin, PluginManifest, TrustLevel
 
 MANIFEST = PluginManifest(
-    name="MyPlugin",
-    version="1.0.0",
-    description="...",
-    author="You",
-    trust_level=PluginTrustLevel.SANDBOX,
+    name        = "MyPlugin",
+    version     = "1.0.0",
+    author      = "You",
+    description = "Does something cool",
+    capabilities = ["read_state", "publish_events"],
+    trust       = TrustLevel.COMMUNITY,
 )
 
-class MyPlugin(CERBERUSPlugin):
-    def __init__(self):
-        super().__init__(MANIFEST)
+class MyPlugin(CerberusPlugin):
+    MANIFEST = MANIFEST
 
-    async def on_load(self, config):
-        self.bus.subscribe(EventType.FUNSCRIPT_TICK, self.on_tick)
+    async def on_load(self):
+        print("MyPlugin loaded!")
 
-    async def on_start(self): ...
-    async def on_stop(self):  ...
-    async def on_unload(self): ...
+    async def on_tick(self, tick: int):
+        if tick % 60 == 0:  # Once per second at 60Hz
+            state = await self.get_state()       # Safe — capability checked
+            await self.publish("my.event", {"battery": state.battery_percent})
 
-    async def on_tick(self, event: Event):
-        pos = event.data["position"]   # 0.0 – 1.0
-        # do something with pos
+    async def on_unload(self):
+        print("MyPlugin unloaded")
 ```
 
-Register it in `main.py`:
+Plugins are auto-discovered from `PLUGIN_DIRS`. No registration needed.
+
+---
+
+## 🧩 All 17 Sport Modes
+
 ```python
-await runtime.load_plugin(MyPlugin(), config={...})
+from cerberus.bridge.go2_bridge import SportMode
+
+# Via API
+requests.post("http://localhost:8080/motion/sport_mode", json={"mode": "hello"})
+
+# Via bridge
+await bridge.execute_sport_mode(SportMode.FRONT_FLIP)   # ⚠️ needs open space!
+await bridge.execute_sport_mode(SportMode.DANCE1)
+await bridge.execute_sport_mode(SportMode.FINGER_HEART)
 ```
 
-### Running Tests
+All modes: `damp`, `balance_stand`, `stop_move`, `stand_up`, `stand_down`, `sit`, `rise_sit`, `hello`, `stretch`, `wallow`, `scrape`, `front_flip`, `front_jump`, `front_pounce`, `dance1`, `dance2`, `finger_heart`
+
+---
+
+## 🛡️ Safety
+
+CERBERUS enforces safety at every layer:
+
+- **Watchdog** at 50Hz: heartbeat timeout, tilt detection, battery monitoring
+- **Hard E-stop**: cannot be bypassed — triggers motor damp
+- **Velocity guardrails**: validated at API level AND bridge level
+- **Plugin capability sandbox**: plugins cannot exceed declared permissions
+- **Audit log**: every safety event written to `logs/safety_audit.jsonl`
 
 ```bash
+# Trigger E-stop
+curl -X POST http://localhost:8080/safety/estop
+
+# View safety events
+curl http://localhost:8080/safety/events
+```
+
+---
+
+## 🧪 Testing
+
+```bash
+# Run full test suite
 pytest tests/ -v
-```
 
-### REST API
+# Run specific test
+pytest tests/test_all.py::test_sim_bridge_all_sport_modes -v
 
-When running, the API is available at `http://localhost:8080`:
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Liveness check |
-| `/state` | GET | Full system state JSON |
-| `/command` | POST | Send command (estop, play, pause, etc.) |
-| `/ws` | WebSocket | Live state stream at ~30Hz |
-
----
-
-## Project Structure
-
-```
-CERBERUS-UnitreeGo2CompanionAPI/
-├── main.py                     Entry point
-├── cerberus/
-│   ├── core/
-│   │   ├── event_bus.py        Central async event bus
-│   │   ├── plugin_base.py      Plugin ABC + trust levels
-│   │   ├── safety.py           Safety manager + watchdog
-│   │   └── runtime.py          30Hz tick loop + plugin registry
-│   └── robot/
-│       └── go2_webrtc.py       Go2 PRO/AIR WebRTC adapter
-├── plugins/
-│   ├── buttplug/               Intiface Central integration
-│   ├── funscript/              FunScript timeline player
-│   ├── galaxy_fit2/            Samsung Galaxy Fit 2 BLE
-│   └── hismith/                Hismith BLE machine control
-├── ui/
-│   ├── cerberus_ui.py          Dear PyGui operator interface
-│   └── ui_bridge.py            Thread-safe runtime ↔ UI bridge
-├── backend/api/server.py       FastAPI REST/WebSocket server
-├── config/cerberus.yaml        All configuration
-├── tests/test_core.py          Core test suite
-├── Vision_Document.md
-├── Changelog.md
-└── requirements.txt
+# With coverage
+pytest tests/ --cov=cerberus --cov=backend --cov-report=html
 ```
 
 ---
 
-## License
+## 📈 Contribution Guidelines
 
-MIT — see [LICENSE](LICENSE)
+1. Fork the repository
+2. Create a branch: `feature/my-feature` or `fix/my-fix`
+3. Run tests before submitting: `pytest tests/ -v`
+4. Lint: `ruff check .`
+5. Submit a pull request with description
+
+All PRs are automatically tested via GitHub Actions.
+
+---
+
+## 🌐 Roadmap
+
+- MuJoCo physics simulation integration
+- RL training pipeline (IsaacLab/MuJoCo environments)
+- Voice/NLU commands (Whisper STT)
+- ROS2 bridge (optional)
+- Multi-agent coordination
+- Mobile companion app
+
+---
+
+## 📜 License
+
+MIT License — see [LICENSE](LICENSE)

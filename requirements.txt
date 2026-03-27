@@ -1,46 +1,63 @@
-# CERBERUS — requirements.txt
+# CERBERUS requirements.txt
 # ══════════════════════════════════════════════════════════════════════════════
-# Pin minor versions for reproducibility; patch versions float for security.
+# Pin all versions for reproducibility.
 # Install: pip install -r requirements.txt
 # ══════════════════════════════════════════════════════════════════════════════
 
-# ── Web / API server ──────────────────────────────────────────────────────────
+# ── Web framework ─────────────────────────────────────────────────────────────
 fastapi>=0.111.0,<0.200.0
 uvicorn[standard]>=0.29.0,<0.35.0
 pydantic>=2.7.0,<3.0.0
-python-multipart>=0.0.9          # file upload support
+python-multipart>=0.0.9
+
+# ── Real-time communication ────────────────────────────────────────────────────
 websockets>=12.0,<14.0
-aiohttp>=3.9.0,<4.0.0            # WebRTC signaling HTTP POST
 
-# ── WebRTC transport (Go2 PRO/AIR) ───────────────────────────────────────────
-aiortc>=1.9.0,<2.0.0             # RTCPeerConnection + data channel
+# ── HTTP client ────────────────────────────────────────────────────────────────
+aiohttp>=3.9.0,<4.0.0
 
-# ── BLE / peripheral devices (Hismith, Galaxy Fit 2) ─────────────────────────
-bleak>=0.21.0,<0.23.0            # Cross-platform BLE (Windows/macOS/Linux)
-
-# ── Buttplug.io ───────────────────────────────────────────────────────────────
-buttplug>=1.0.0                  # Official PyPI package, protocol v4
-
-# ── UI (Dear PyGui) ───────────────────────────────────────────────────────────
-dearpygui>=1.11.0,<2.0.0         # Native GPU-accelerated UI
-
-# ── Config / serialisation ────────────────────────────────────────────────────
+# ── Configuration ─────────────────────────────────────────────────────────────
 pyyaml>=6.0.1,<7.0.0
 python-dotenv>=1.0.0
 
-# ── Utilities ─────────────────────────────────────────────────────────────────
-# (no heavy deps — keep it lean)
+# ── Unitree Go2 SDK (DDS communication layer) ─────────────────────────────────
+# REQUIRED for real hardware. Uses CycloneDDS pub/sub, NOT HTTP.
+# CycloneDDS must be built first — see README for instructions.
+#
+# Install from source:
+#   git clone https://github.com/eclipse-cyclonedds/cyclonedds -b releases/0.10.x
+#   cd cyclonedds && mkdir build install && cd build
+#   cmake .. -DCMAKE_INSTALL_PREFIX=../install
+#   cmake --build . --target install
+#   export CYCLONEDDS_HOME=~/cyclonedds/install
+#
+# Then install the Python SDK:
+#   git clone https://github.com/unitreerobotics/unitree_sdk2_python.git
+#   cd unitree_sdk2_python && pip install -e .
+#
+# cyclonedds==0.10.2      # Uncomment after manual install
+# unitree-sdk2py           # Install from source per above
 
-# ── Optional: Vision / Perception ────────────────────────────────────────────
-# ultralytics>=8.0.0            # YOLOv8 object detection
-# mediapipe>=0.10.0             # Pose / landmark detection
-# opencv-python>=4.9.0          # Camera capture
+# ── Numerical ─────────────────────────────────────────────────────────────────
+numpy>=1.26.0,<2.1.0
 
-# ── Optional: ROS2 ───────────────────────────────────────────────────────────
-# rclpy                         # Installed via apt / ROS2 overlay, not pip
+# ── Optional: Vision (Perception plugin) ──────────────────────────────────────
+# ultralytics>=8.2.0          # YOLOv8 object detection
+# mediapipe>=0.10.0            # Pose / landmark detection
+# opencv-python>=4.9.0         # Camera capture
+
+# ── Optional: Simulation (MuJoCo) ─────────────────────────────────────────────
+# mujoco>=3.1.0                # Physics simulation
+# dm-control>=1.0.20           # MuJoCo Python bindings
+
+# ── Optional: BLE connectivity ────────────────────────────────────────────────
+# bleak>=0.21.0                # Cross-platform BLE
+
+# ── Optional: ROS2 ────────────────────────────────────────────────────────────
+# rclpy                        # Install via: sudo apt install ros-humble-rclpy
 
 # ── Dev / Testing ─────────────────────────────────────────────────────────────
 pytest>=8.1.0
 pytest-asyncio>=0.23.0
-httpx>=0.27.0                    # FastAPI async test client
-ruff>=0.4.0                      # Linter / formatter
+httpx>=0.27.0
+ruff>=0.4.0
