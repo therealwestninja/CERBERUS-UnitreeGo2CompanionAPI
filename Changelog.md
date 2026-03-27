@@ -1,143 +1,132 @@
-# CERBERUS Changelog
+# Changelog
 
 All notable changes to CERBERUS are documented here.
-Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
-Versioning: [Semantic Versioning](https://semver.org/)
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [2.1.0] — 2026-03-27
-
-### 🔴 Breaking Changes
-- `cerberus/bridge/go2_bridge.py` rewritten — now uses CycloneDDS via `unitree_sdk2_python`, not HTTP
-- `GO2_IP` env var replaced by `GO2_NETWORK_INTERFACE` (e.g. `eth0`)
-- Plugin base class now requires `MANIFEST` class attribute with `PluginManifest`
+## [3.0.0] — 2026-03-27
 
 ### Added
-- **Complete DDS bridge** (`cerberus/bridge/go2_bridge.py`)
-  - `RealBridge` — CycloneDDS via `unitree_sdk2_python` SportClient
-  - `SimBridge` — full behavioral simulation with state drift (no hardware required)
-  - All **17 sport modes** mapped: damp, balance_stand, stop_move, stand_up, stand_down, sit, rise_sit, hello, stretch, wallow, scrape, front_flip, front_jump, front_pounce, dance1, dance2, finger_heart
-  - LED, volume, and obstacle avoidance control
-  - `RobotState` dataclass with full state snapshot + `to_dict()`
-  - `create_bridge()` factory respecting `GO2_SIMULATION` env var
 
-- **Safety Watchdog** (`cerberus/core/safety.py`)
-  - Heartbeat timeout (default 5s) → automatic `stop_move()`
-  - Tilt / fall detection (roll/pitch > 30°) → E-stop
-  - Battery critical (< 4%) → E-stop
-  - Battery warning levels (15%, 8%) with level transitions
-  - Velocity and body-height guardrail validators
-  - JSONL audit log at `logs/safety_audit.jsonl`
-  - E-stop: one-way in real mode, clearable in simulation
+**Hardware Transport Layer (major)**
+- `cerberus/hardware/go2_bridge.py` — unified `Go2Bridge` with three transport backends:
+  - `_DDSTransport` — wraps `unitree_sdk2_python` over CycloneDDS (Go2 EDU wired)
+  - `_WebRTCTransport` — wraps `go2_webrtc_connect` / `unitree_webrtc_connect` for Wi-Fi (AIR/PRO/EDU, no jailbreak)
+  - `_MockTransport` — in-memory stub for CI and simulation mode
+- All 17 Go2 native sport modes mapped in both DDS method names and WebRTC API IDs
+- `RobotState` dataclass with position, velocity, IMU, battery, foot force, and status flags
+- Auto-reconnect watchdog background task
+- `add_state_listener()` callback hook for event-driven integrations
+- `Go2Bridge.from_config()` factory — transport selected from `config/cerberus.yaml`
 
-- **Core Engine** (`cerberus/core/engine.py`)
-  - Deterministic asyncio tick loop at 30–200Hz (configurable via `CERBERUS_HZ`)
-  - Priority scheduling: safety → control → cognition → perception → anatomy → learning → plugins → UI
-  - Centralized `EventBus` (async pub/sub, typed topics)
-  - Engine states: STOPPED / STARTING / RUNNING / PAUSED / ERROR / SHUTDOWN
-  - Live `EngineStats` (Hz, dt, overrun count, uptime)
-  - `register_hook()` / `unregister_hook()` for plugin tick callbacks
-  - Tick overrun detection and logging
+**Safety Gate (major)**
+- `cerberus/safety/gate.py` — `SafetyGate` with full constraint enforcement:
+  - Battery guard: warn at 22 V, hard block at 20.5 V
+  - Tilt guard: warn at ~20°, hard block at ~40° IMU tilt
+  - Velocity hard limits: vx ±1.5 m/s, vy ±0.8 m/s, vyaw ±2.0 rad/s
+  - Special-motion cooldown timer (configurable, default 3 s)
+  - Violation audit counter
+  - `allow_move()`, `allow_mode()`, `check_config()` interface
+- `SafetyConfig` dataclass for full customisation via YAML
 
-- **Behavior Engine** (`cerberus/cognitive/behavior_engine.py`)
-  - Three-layer architecture: Reactive → Deliberative → Reflective
-  - Behavior tree nodes: Selector, Sequence, Condition, Action
-  - `PersonalityTraits` (energy, friendliness, curiosity, loyalty, playfulness)
-  - `MoodState` enum with valence/arousal properties
-  - `WorkingMemory` — TTL-based key-value store (capacity-limited)
-  - `GoalQueue` — priority-sorted, expiry-aware goal stack
-  - Boredom accumulator → auto-play behavior trigger
-  - Human detection → automatic greeting behavior
-  - Configurable via `PERSONALITY_*` env vars
+**Cognitive Engine (new)**
+- `cerberus/core/cognitive.py` — three-layer decision system:
+  - Reactive loop (20 Hz) — emergency override for battery-critical and tilt-alert
+  - Deliberative loop (1 Hz) — goal selection, behavior scheduling
+  - Reflective modulation — personality traits adjust greet/explore thresholds
+- `WorkingMemory` dataclass: human-seen, obstacle, battery, tilt, idle timer
+- `Goal` / `GoalType` system: IDLE, EXPLORE, GREET, PATROL, CHARGE, USER_CUSTOM
+- External stimulus hooks: `notify_human_detected()`, `notify_obstacle()`, `update_from_state()`
 
-- **Digital Anatomy** (`cerberus/anatomy/kinematics.py`)
-  - 12-DOF joint model with names, limits, velocity, torque
-  - Forward kinematics using Go2 URDF link lengths (L_HIP=0.0955, L_THIGH=0.213, L_CALF=0.213)
-  - Per-joint fatigue accumulator (intensity × velocity × time)
-  - `support_polygon()` — convex hull of contact feet
-  - `stability_margin()` — COM-to-edge distance
-  - `EnergyModel` — idle power + joint power → remaining runtime estimate
-  - COM tracking from foot positions
+**Behavior Engine (enhanced)**
+- `cerberus/behavior/engine.py` — `BehaviorEngine` with 10 built-in canine behaviors:
+  - `idle`, `sit`, `stand`, `greet` (head tilt + hello), `stretch`
+  - `dance` (random dance1/dance2), `patrol` (configurable square loop)
+  - `wag` (wallow motion), `alert` (raised posture), `emergency_sit`
+- Priority-queued async execution (`asyncio.PriorityQueue`)
+- Per-behavior cooldown enforcement
+- Execution history (last 50 entries)
+- `BehaviorDescriptor` registration API for custom plugin behaviors
 
-- **Plugin System** (`cerberus/plugins/plugin_manager.py`)
-  - `TrustLevel`: TRUSTED / COMMUNITY / UNTRUSTED
-  - Capability manifests: 10 named capabilities, trust-gated
-  - Dynamic load/unload via `importlib` (sandboxed namespace)
-  - Auto-discovery from plugin directories
-  - `CerberusPlugin` base class with safe capability-checked bridge wrappers
-  - Auto-disable after `PLUGIN_MAX_ERRORS` consecutive failures
-  - Plugin enable/disable without unloading
+**Personality Model (new)**
+- `cerberus/personality/model.py` — traits + dynamic mood system:
+  - Traits: `sociability`, `playfulness`, `energy`, `curiosity` (0–1, stable)
+  - Mood: `valence` (-1 → +1) and `arousal` (0 → 1), exponential decay
+  - Events: `on_interaction()`, `on_battery_low()`, `on_obstacle()`, `on_task_success()`
+  - `mood_label` property: excited / content / calm / neutral / anxious / distressed
+  - JSON persistence across restarts
 
-- **FastAPI Backend** (`backend/main.py`)
-  - Full REST API (24 endpoints) — motion, safety, behavior, peripherals, plugins
-  - WebSocket `/ws` — state broadcast at 30Hz + incoming command handler
-  - Pydantic v2 models with field validation (ranges, types)
-  - `asynccontextmanager` lifespan (clean startup/shutdown)
-  - CORS middleware with configurable origins
-  - All velocity/pose commands go through safety watchdog before bridge
-  - Simulation info surfaced in root endpoint
+**Plugin System (enhanced)**
+- `cerberus/plugins/manager.py` — 4-tier trust enforcement:
+  - `core` / `trusted` / `community` / `untrusted` trust levels
+  - Capability check against trust level on load
+  - `PluginContext` exposes `bridge` and `behavior_engine` only to permitted trust levels
+  - Auto-discovery from `plugins/` via `plugin.yaml` manifests
+  - Dynamic load/unload with proper lifecycle (`on_load` / `on_unload`)
 
-- **Example Plugin** (`plugins/examples/perception_plugin/plugin.py`)
-  - YOLOv8 object detection on Go2 front camera
-  - Human detection → behavior engine callback
-  - Obstacle detection → behavior engine callback
-  - Graceful fallback when ultralytics/opencv not installed
+**REST + WebSocket API (major expansion)**
+- `backend/api/server.py` — FastAPI server with full CERBERUS surface:
+  - 18 REST endpoints covering motion, mode, config, behavior, personality, plugins
+  - `/ws/telemetry` WebSocket: 10 Hz state push + inbound command handling
+  - Full `asynccontextmanager` lifespan: bridge → personality → behavior → cognitive → plugins → broadcaster
+  - CORS middleware, Pydantic v2 validation with range constraints on all inputs
+  - `emergency_stop` always bypasses safety queue for immediate hardware response
 
-- **Test Suite** (`tests/test_all.py`)
-  - `test_bridge.py` — SimBridge unit tests (all sport modes, estop, LED, state)
-  - `test_engine.py` — Engine tick loop, pause/resume, event bus, safety watchdog
-  - `test_api.py` — Full REST endpoint coverage with httpx AsyncClient
-  - `test_plugins.py` — Plugin load/unload, capability sandboxing, error isolation
+**Configuration**
+- `config/cerberus.yaml` — fully documented configuration reference
+- Transport, safety thresholds, behavior tick rate, cognitive enable, personality traits, plugins dir
 
-- **Updated docs**
-  - `Vision_Document.md` — Implementation status table, SDK architecture diagram, API quick reference
-  - `Changelog.md` — This file
-  - `Readme.md` — Updated install (CycloneDDS), quickstart, network setup
+**Tests**
+- `tests/test_cerberus.py` — ~50 tests across 6 test classes:
+  - `TestSafetyGate` — battery, tilt, velocity, mode cooldown, config validation
+  - `TestGo2Bridge` — connect, move/clamp, stop, all 17 modes, euler clamp, listeners
+  - `TestBehaviorEngine` — registration, enqueue, execution, cooldown, history cap
+  - `TestPersonalityModel` — trait clamp, mood decay, events, persistence, `to_dict`
+  - `TestAPIEndpoints` — all 15 REST endpoints (mock bridge)
+  - `TestAvailableModes` — completeness check for all 17 modes
+
+**Plugin Examples**
+- `plugins/examples/hello_world/` — complete plugin template with `plugin.yaml` manifest
 
 ### Changed
-- `pyproject.toml`: renamed package `go2-platform` → `cerberus-go2`, version `2.0.0` → `2.1.0`
-- `pyproject.toml`: moved `numpy` to core deps (required by SDK and anatomy model)
-- `requirements.txt`: added `numpy`, detailed CycloneDDS install instructions
-- All motion commands now call `watchdog.ping_heartbeat()` before dispatch
-- Bridge move() enforces velocity clamping at the bridge layer in addition to API validation
+
+- `requirements.txt` — added `numpy`, properly commented optional deps (DDS, WebRTC, Vision, Audio, BLE)
+- `pyproject.toml` — project name, version bumped to 3.0.0
+- All existing module stubs wired to real hardware bridge and safety gate
 
 ### Fixed
-- Bridge was using non-existent HTTP interface — now uses correct DDS channel
-- Sport mode commands were missing Unitree SDK2 method bindings
-- Plugin loader was not sandboxing module namespace — now uses isolated `module_from_spec`
-- Engine had no safety check before dispatching motion commands
-- No E-stop mechanism existed — added both API endpoint and watchdog auto-trigger
-- `pyproject.toml` build-backend had typo (`setuptools.backends.legacy:build`)
+
+- `Go2Bridge` no longer exposes raw transport to application code (encapsulation)
+- All mode names normalised to `snake_case` consistently across bridge, behavior engine, and API
+- WebSocket broadcaster no longer raises on dead client connections
 
 ---
 
-## [2.0.0] — 2026-01-15
+## [2.0.0] — 2025-12-01
 
 ### Added
-- Initial project scaffold
-- Directory structure: cerberus/, backend/, config/, plugins/examples/, tests/, ui/, docs/
-- FastAPI + uvicorn foundation
-- `requirements.txt` with core dependencies
-- `pyproject.toml` build configuration
-- `.env.example` configuration template
-- GitHub Actions CI workflows
-- `Readme.md` and `Vision_Document.md`
-- `CONTRIBUTING.md`
-- `Dockerfile`
-- `Makefile`
+- FastAPI backend scaffold with `uvicorn` + `pydantic v2`
+- Plugin system skeleton with manifest loading
+- WebSocket telemetry endpoint
+- CI/CD workflows: Node.js, Python package, linting, security scan
+- Dockerfile and Makefile
+- Initial behavior engine stub
+- Initial cognitive engine stub
+
+### Changed
+- Migrated from Flask to FastAPI
+- Replaced `requirements.txt` with `pyproject.toml` as source of truth
 
 ---
 
-## [Unreleased]
+## [1.0.0] — 2025-09-15
 
-### Planned
-- MuJoCo physics simulation integration (unitree_mujoco)
-- Reinforcement learning agent (IsaacLab/MuJoCo environments)
-- Imitation learning pipeline (unitree_lerobot reference)
-- Voice/NLU command interface (Whisper STT)
-- ROS2 bridge (unitree_ros2 reference)
-- Multi-agent coordination (swarm DDS topics)
-- Predictive world model for planning
-- Mobile companion app (Flutter WebSocket client)
-- Personality evolution over session history
+### Added
+- Initial project structure: `cerberus/`, `backend/`, `tests/`, `config/`, `docs/`, `ui/`
+- Vision Document
+- README
+- MIT License
+- `.gitignore`, `.env.example`
+- Contributing guidelines

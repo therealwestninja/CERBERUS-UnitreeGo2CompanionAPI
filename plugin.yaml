@@ -1,0 +1,10 @@
+name: HelloWorldPlugin
+version: 1.0.0
+author: CERBERUS Contributors
+description: Minimal example plugin — demonstrates the CERBERUS plugin API
+entry_point: plugins.examples.hello_world.hello_world:HelloWorldPlugin
+capabilities:
+  - motion
+  - perception
+trust_level: trusted
+enabled: false   # set to true to auto-load on startup

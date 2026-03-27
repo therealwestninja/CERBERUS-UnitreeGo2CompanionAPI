@@ -1,0 +1,59 @@
+# cerberus.yaml
+# =============
+# CERBERUS — Unitree Go2 Companion API
+# Full configuration reference
+# All settings have sensible defaults; only override what you need.
+
+# ─── Robot / Hardware ────────────────────────────────────────────────────────
+robot:
+  # Transport backend: "mock" | "dds" | "webrtc"
+  # mock    = simulation only; no real hardware needed (default)
+  # dds     = CycloneDDS via unitree_sdk2_python (Go2 EDU, wired ethernet)
+  # webrtc  = Wi-Fi WebRTC (Go2 AIR / PRO / EDU, requires go2_webrtc_connect)
+  transport: mock
+
+  # --- DDS settings (transport: dds) ---
+  # network_interface: eth0
+
+  # --- WebRTC settings (transport: webrtc) ---
+  # webrtc_method: local_sta    # ap | local_sta | remote
+  # robot_ip: 192.168.8.1       # direct IP (optional if using serial_number)
+  # serial_number: B42D2000XXXXXXXX
+  # webrtc_username: ""         # required for remote mode
+  # webrtc_password: ""
+
+# ─── Safety ──────────────────────────────────────────────────────────────────
+safety:
+  battery_warn_v:     22.0    # warn below this voltage
+  battery_critical_v: 20.5   # block motion below this
+  max_vx:   1.5               # hard velocity limits (m/s)
+  max_vy:   0.8
+  max_vyaw: 2.0
+  tilt_warn_rad:  0.35        # ~20° tilt: throttle high-speed
+  tilt_block_rad: 0.70        # ~40° tilt: block all motion
+  special_motion_cooldown: 3.0  # seconds between dance/flip moves
+
+# ─── Behavior ────────────────────────────────────────────────────────────────
+behavior:
+  tick_rate_hz: 10.0
+
+# ─── Cognitive Engine ────────────────────────────────────────────────────────
+cognitive:
+  enabled: true
+
+# ─── Personality ─────────────────────────────────────────────────────────────
+personality:
+  persistence_path: cerberus_personality.json
+  traits:
+    sociability:  0.7
+    playfulness:  0.6
+    energy:       0.7
+    curiosity:    0.6
+
+# ─── Plugins ─────────────────────────────────────────────────────────────────
+plugins_dir: plugins
+
+# ─── Server ──────────────────────────────────────────────────────────────────
+# Override via env vars: CERBERUS_HOST, CERBERUS_PORT, CERBERUS_DEV
+# host: 0.0.0.0
+# port: 8080
