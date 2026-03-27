@@ -1,149 +1,168 @@
-## UnitreeGo2CompanionAPI **v2 Vision Document**
+# CERBERUS | Canine-Emulative Responsive Behavioral Engine & Reactive Utility System – Vision Document
 
-### 1. Project Overview
-
-**UnitreeGo2CompanionAPI** is an open-source, modular, and intelligent robotics platform designed for quadrupedal robots. Its mission is to provide a **fully autonomous, adaptive, and expressive robotic companion** that bridges cutting-edge robotics, AI, and user-focused design.
-
-This platform is **more than an API**—it’s a **living, digital organism**, combining:
-
-* **Mind:** Cognitive intelligence, learning, planning, and human-awareness
-* **Body:** Embodied kinematics, real-time motion, energy modeling
-* **System:** Robust software architecture, plugin ecosystem, observability, and fail-safes
+**Repository:** [UnitreeGo2CompanionAPI](https://github.com/therealwestninja/UnitreeGo2CompanionAPI)
+**Project Goal:** Develop **CERBERUS**, a **fully intelligent, autonomous, adaptive, and embodied quadrupedal robotics platform** that simulates realistic canine behavior while providing **extensible, modular, and research-grade utility systems** for developers, researchers, and end-users.
 
 ---
 
-### 2. Vision Statement
+## 1. Project Overview
 
-To create a **research-grade, extensible, and safe robotic intelligence platform** that:
+CERBERUS is **more than a control API**: it is a **cognitive-emulative engine**, a **body-aware motion system**, and a **reactive utility framework** for quadrupedal robotics. Its mission is to merge **AI-driven autonomy, physical realism, learning capability, and human-aware interaction** into a single platform.
 
-* Responds to its environment and users in **real time**
-* Learns and adapts from interactions and experience
-* Supports **modular expansion** through a plugin ecosystem
-* Serves both **developers** and **end-users** as a “gold standard” robotic framework
+Key pillars:
 
----
+* **Mind:** Cognitive processing, goal-oriented behavior, learning, and environmental awareness.
+* **Body:** Realistic digital anatomy, kinematics, energy modeling, and stability-aware motion.
+* **System:** Robust, plugin-based architecture with observability, simulation, safety, and CI/CD integration.
 
-### 3. Goals
-
-1. **Intelligent Autonomy:** Enable reactive, deliberative, and reflective behaviors that simulate cognition.
-2. **Embodiment and Realism:** Accurate digital anatomy, motion constraints, and energy/resource awareness.
-3. **Human-Aware Interaction:** Predict and adapt to user intent, presence, and preferences.
-4. **Extensible Ecosystem:** Standardized plugin system with robust lifecycle, sandboxing, and version control.
-5. **Reliability and Safety:** Fault-tolerant architecture, real-time guarantees, and ethical constraint enforcement.
-6. **Observability and Debugging:** Full transparency via debug overlays, event logging, and visualization.
-7. **Learning and Adaptation:** Support reinforcement, imitation, and preference learning pipelines.
-8. **Developer-Friendly:** Quick start guides, templates, CLI tools, and CI/CD workflows.
+CERBERUS sets a **gold standard for quadruped robotics**, enabling experimentation, education, and research-grade implementation.
 
 ---
 
-### 4. Key Features
+## 2. Vision Statement
 
-**A. Core Runtime Engine**
+To create a **self-aware, responsive, and emulative quadruped robotic system** that:
 
-* Unified tick-based update loop with priority scheduling
-* Centralized event bus and state management
-* Plugin lifecycle orchestration
+* Demonstrates **realistic canine-like behaviors** while interacting intelligently with users and environments.
+* Learns, adapts, and personalizes behavior over time.
+* Offers a **fully extensible platform** through a plugin ecosystem.
+* Provides **research-grade observability, simulation, and developer tools**.
+* Serves as a **modular framework** for further experimentation in AI, robotics, and autonomous systems.
 
-**B. Cognitive Architecture**
+---
 
-* Layered intelligence: reactive, deliberative, reflective
-* Goal-oriented behavior with attention system
-* Working and long-term memory models
+## 3. Core Objectives
 
-**C. Digital Anatomy**
+1. **Intelligent Autonomy:** Layered decision-making with reactive, deliberative, and reflective capabilities.
+2. **Embodiment & Physical Realism:** Accurate kinematics, stability, energy/fatigue modeling, and digital anatomy.
+3. **Perception & Understanding:** Sensor fusion and semantic interpretation for objects, environments, and humans.
+4. **Learning & Adaptation:** Reinforcement, imitation, and preference-based learning pipelines.
+5. **Behavior & Personality:** Behavior trees/hybrid engines, mood and personality states, human-aware modulation.
+6. **Extensibility & Plugins:** Modular, sandboxed plugin ecosystem with manifest, versioning, and example plugins.
+7. **Simulation & Observability:** Real-time simulation, debug overlays, event timelines, state inspection, and scenario testing.
+8. **Safety, Ethics & Reliability:** Fault-tolerant systems, watchdogs, fallback modes, plugin trust levels, and resource-aware behavior.
+9. **Developer Experience:** Quick-start guides, CLI, plugin templates, CI/CD pipelines, and testing workflows.
 
-* Kinematic chain with joint constraints
-* Center-of-mass and stability modeling
-* Energy and “fatigue” simulation
+---
 
-**D. Perception System**
+## 4. Core Features
 
-* Sensor fusion (camera, LIDAR, IMU)
-* Semantic understanding: objects, scenes, humans
-* Context-aware perception and decision-making
+**A. Runtime Engine**
+
+* Tick-based loop (30–200Hz)
+* Priority scheduling: safety → control → cognition → animation → UI
+* Centralized state/event bus
+* Plugin lifecycle management
+
+**B. Cognitive Engine (“Mind”)**
+
+* Reactive, deliberative, reflective layers
+* Working + long-term memory
+* Goal prioritization and attention system
+* Adaptive decision-making
+
+**C. Digital Anatomy (“Body”)**
+
+* Joint kinematics and constraints
+* COM tracking, balance, energy/fatigue
+* Stress/load awareness integrated with control and animation
+
+**D. Perception Pipeline**
+
+* Sensor fusion: camera, LIDAR, IMU
+* Object/scene/human detection and semantic labeling
+* Context-aware decision-making
 
 **E. Learning System**
 
-* Reinforcement and imitation learning
-* Preference personalization
-* Experience-driven adaptation
+* Reinforcement learning (environment interaction)
+* Imitation learning (user-guided behavior)
+* Preference-based personalization
 
-**F. Behavior and Personality Layer**
+**F. Behavior & Personality**
 
-* Behavior tree engine with priorities and interrupts
-* Personality traits and mood states
-* Human-aware behavior modulation
+* Behavior tree/hybrid engine with interrupts
+* Dynamic traits and mood system
+* Human-aware modulation of behavior
 
 **G. Plugin Ecosystem**
 
-* Modular architecture with capability-based permissions
-* Plugin manifest, sandboxing, and version control
-* Standalone plugin repositories
+* Sandboxed, capability-based, versioned
+* Dynamic load/unload
+* Standalone plugin extraction for Animation, Simulation, Perception, Localization, Debugging
 
-**H. Observability and Simulation**
+**H. Observability & Simulation**
 
-* Real-time simulation environment
 * Debug overlays, event timeline, state inspector
-* Scenario testing and autonomous behavior preview
+* Scenario testing and autonomous behavior demos
+* Translation/localization integration
 
-**I. Safety and Ethics**
+**I. Safety & Ethics**
 
-* Hard and soft safety constraints
+* Fault-tolerant architecture
+* Watchdogs, crash isolation, safe fallback modes
 * Plugin trust levels and audit logging
 * Resource-aware decision-making
 
-**J. Developer Tools and Distribution**
+**J. Data & Training**
 
-* Quick-start guides, CLI, templates
-* Versioned core + plugin packages
-* CI/CD workflows with testing and security scans
+* Logging and replay system
+* Dataset export for model improvement
+
+**K. Developer Tools & CI/CD**
+
+* Quick-start guides, CLI tools, plugin templates
+* Node.js.yml, python-package.yml, testing, linting, security scans
+* Versioned core + plugin distribution
 
 ---
 
-### 5. Future Enhancements (v2+)
+## 5. Deliverables
+
+1. Architecture diagrams (runtime + cognitive + body + plugin)
+2. Core runtime engine
+3. Cognitive system
+4. Embodiment model
+5. Perception pipeline
+6. Learning/adaptation system
+7. Behavior & personality layer
+8. Plugin system + example plugin
+9. Simulation environment
+10. Observability/debug tools
+11. Data logging/training pipeline
+12. Safety, ethics, reliability systems
+13. Developer documentation, CLI tools, CI/CD workflows
+
+---
+
+## 6. Future Directions
 
 * Multi-agent coordination (swarm behaviors)
-* Predictive world model for planning and risk assessment
-* Voice interaction / natural language understanding
+* Predictive world modeling for planning and risk assessment
+* Voice/NLU integration for user commands
 * Advanced personality evolution over time
-* Integration with external AI models for perception or planning
+* Integration with external AI modules for planning, perception, and emotion simulation
 
 ---
 
-### 6. Target Users
+## 7. Target Audience
 
-* **Researchers:** Study autonomous quadrupeds, AI, and robotics behavior
-* **Developers:** Build plugins, extend functionality, or integrate with new systems
-* **Enthusiasts:** Use the robot dog as a companion or educational platform
-
----
-
-### 7. Success Metrics
-
-* Stable, fault-tolerant runtime across simulation and hardware
-* Plugin ecosystem with seamless integration and sandboxing
-* Demonstrable adaptive and learning behaviors
-* Safe and human-aware autonomous operation
-* Developer adoption and community contributions
+* **Researchers:** Autonomous systems, robotics, AI behavior modeling
+* **Developers:** Plugin development, system extension, testing AI interactions
+* **Enthusiasts:** Realistic robotic companions, educational and experimental use
 
 ---
 
-### 8. Scope
+## 8. Success Metrics
 
-**In Scope**
-
-* Core runtime, cognitive and behavior systems
-* Plugin system and simulation environment
-* Learning pipelines, perception, and human interaction models
-* Safety, observability, and CI/CD workflows
-
-**Out of Scope**
-
-* Hardware manufacturing design (focus on software control and simulation)
-* Physical modifications outside supported quadruped robots
+* Stable runtime in simulation and hardware
+* Robust plugin ecosystem with sandboxing and versioning
+* Demonstrated adaptive, autonomous, and human-aware behavior
+* Safe, resource-aware, and ethically constrained operation
+* High adoption, contributions, and experimental use in research
 
 ---
 
-### 9. Conclusion
+## 9. Conclusion
 
-**UnitreeGo2CompanionAPI v2** is envisioned as the **ultimate robotic intelligence platform**: a fusion of AI, robotics, and digital embodiment that is extensible, safe, and research-ready. Its goal is to empower developers, researchers, and users to **experiment, learn, and create intelligent robotic companions** in a unified, modular, and robust ecosystem.
+**CERBERUS** is envisioned as the **ultimate canine-emulative robotic intelligence platform**: combining **mind, body, and system** to create a safe, adaptive, and expressive quadrupedal robot. It is **modular, extensible, research-grade, and developer-friendly**, providing a foundation for the next generation of intelligent quadrupeds.
