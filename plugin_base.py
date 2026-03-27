@@ -89,8 +89,9 @@ class CERBERUSPlugin(ABC):
     async def on_unload(self) -> None:
         """Disconnect everything; release OS/hardware resources."""
 
-    async def on_tick(self, dt: float) -> None:
-        """Optional per-tick update hook.  Override as needed.  dt = seconds since last tick."""
+    async def on_tick(self, dt: float) -> None:  # noqa: B027
+        """Optional per-tick update hook.  Override in subclasses that need a heartbeat.
+        dt is seconds elapsed since the previous tick.  Default is a no-op."""
 
     # ── Managed lifecycle ─────────────────────────────────────────────────────
 

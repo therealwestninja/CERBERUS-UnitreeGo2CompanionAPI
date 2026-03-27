@@ -118,11 +118,10 @@ class ButtplugPlugin(CERBERUSPlugin):
                 await asyncio.sleep(5.0)
 
     async def _disconnect(self) -> None:
+        import contextlib
         if self._client and self._connected:
-            try:
+            with contextlib.suppress(Exception):
                 await self._client.disconnect()
-            except Exception:
-                pass
         self._connected = False
         self._devices.clear()
 
@@ -209,11 +208,10 @@ class ButtplugPlugin(CERBERUSPlugin):
                 logger.debug("Device command error (%s): %s", device.name, e)
 
     async def _stop_all_devices(self) -> None:
+        import contextlib
         if not self._client:
             return
         for device in list(getattr(self._client, "devices", {}).values()):
-            try:
+            with contextlib.suppress(Exception):
                 await device.stop()
-            except Exception:
-                pass
         self._last_intensity = 0.0

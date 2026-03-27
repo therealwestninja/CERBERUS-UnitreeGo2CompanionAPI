@@ -145,12 +145,11 @@ class HismithPlugin(CERBERUSPlugin):
         return None
 
     async def _disconnect(self) -> None:
+        import contextlib
         self._connected = False
         if self._client:
-            try:
+            with contextlib.suppress(Exception):
                 await self._client.disconnect()
-            except Exception:
-                pass
         self._client = None
 
     def _on_disconnect(self, _: Any) -> None:

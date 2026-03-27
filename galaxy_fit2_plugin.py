@@ -186,12 +186,11 @@ class GalaxyFit2Plugin(CERBERUSPlugin):
             logger.warning("Samsung HR init failed: %s", e)
 
     async def _disconnect(self) -> None:
+        import contextlib
         self._connected = False
         if self._client:
-            try:
+            with contextlib.suppress(Exception):
                 await self._client.disconnect()
-            except Exception:
-                pass
         self._client = None
 
     def _on_ble_disconnect(self, _: Any) -> None:
@@ -217,10 +216,7 @@ class GalaxyFit2Plugin(CERBERUSPlugin):
         if len(data) < 2:
             return
         flags = data[0]
-        if flags & 0x01:
-            bpm = struct.unpack_from("<H", data, 1)[0]
-        else:
-            bpm = data[1]
+        bpm = struct.unpack_from("<H", data, 1)[0] if flags & 0x01 else data[1]
         self._handle_bpm(bpm)
 
     def _on_hr_proprietary(self, handle: int, data: bytearray) -> None:

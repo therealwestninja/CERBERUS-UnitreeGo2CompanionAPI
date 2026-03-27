@@ -155,12 +155,18 @@ class UIBridge:
         position_norm: float | None = None,
     ) -> None:
         with self._lock:
-            if loaded       is not None: self._state.fs_loaded        = loaded
-            if path         is not None: self._state.fs_path          = path
-            if playing      is not None: self._state.fs_playing       = playing
-            if duration_ms  is not None: self._state.fs_duration_ms   = duration_ms
-            if position_ms  is not None: self._state.fs_position_ms   = position_ms
-            if position_norm is not None: self._state.fs_position_norm = position_norm
+            if loaded is not None:
+                self._state.fs_loaded = loaded
+            if path is not None:
+                self._state.fs_path = path
+            if playing is not None:
+                self._state.fs_playing = playing
+            if duration_ms is not None:
+                self._state.fs_duration_ms = duration_ms
+            if position_ms is not None:
+                self._state.fs_position_ms = position_ms
+            if position_norm is not None:
+                self._state.fs_position_norm = position_norm
 
     def update_peripheral(self, device: str, connected: bool) -> None:
         with self._lock:
