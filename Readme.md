@@ -83,7 +83,7 @@ CERBERUS is a **fully autonomous, adaptive, and intelligent quadrupedal robotics
 **Clone the repository:**
 
 ```bash
-git clone [https://github.com/therealwestninja/UnitreeGo2CompanionAPI](https://github.com/therealwestninja/CERBERUS-UnitreeGo2CompanionAPI).git
+git clone https://github.com/therealwestninja/CERBERUS-UnitreeGo2CompanionAPI.git
 cd UnitreeGo2CompanionAPI
 ```
 
