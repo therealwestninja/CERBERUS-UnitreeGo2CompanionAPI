@@ -1,73 +1,42 @@
-# config/cerberus.yaml  — CERBERUS v3.1.0
-# ════════════════════════════════════════════════════════════════════════
-# All settings have sensible defaults — only override what you need.
-# Environment variables (see .env.example) override these values.
-# ════════════════════════════════════════════════════════════════════════
+# CERBERUS — config/cerberus.yaml
+# ═══════════════════════════════════════════════════════════════
+# All settings can be overridden via environment variables
+# (see .env.example for the mapping).
+# ═══════════════════════════════════════════════════════════════
 
-# ─── Robot / Hardware ────────────────────────────────────────────────────
 robot:
-  # transport: "mock" | "dds" | "webrtc"
-  #
-  #   mock    → in-memory simulation (default — no hardware needed)
-  #   dds     → CycloneDDS via unitree_sdk2_python (Go2 EDU wired Ethernet)
-  #   webrtc  → Wi-Fi WebRTC via go2_webrtc_connect (AIR/PRO/EDU, no jailbreak)
-  transport: mock
+  ip:          "192.168.123.1"   # Go2 default IP on direct-connect Wi-Fi
+  simulation:  false              # Set true to run without hardware
 
-  # ── DDS settings (transport: dds) ──────────────────────────────────────
-  # network_interface: eth0       # network interface connected to robot
+api:
+  host: "0.0.0.0"
+  port: 8080
 
-  # ── WebRTC settings (transport: webrtc) ────────────────────────────────
-  # webrtc_method:   local_sta    # ap | local_sta | remote
-  # robot_ip:        192.168.8.1  # direct IP (leave blank for serial discovery)
-  # serial_number:   B42D2000XXXXXXXX
-  # webrtc_username: ""           # required for remote (TURN server) mode only
-  # webrtc_password: ""
+plugins:
+  funscript:
+    autoload: ""                  # optional: path to auto-load on startup
 
-# ─── Safety ──────────────────────────────────────────────────────────────
+  buttplug:
+    intiface_url:    "ws://127.0.0.1:12345"
+    scan_timeout_s:  5
+
+  hismith:
+    device_address:  ""           # leave blank to auto-scan via BLE
+    scan_timeout_s:  10
+    max_speed_pct:   80           # safety cap (0–100)
+
+  galaxy_fit2:
+    device_address:  ""           # leave blank to auto-scan
+    device_name:     "Galaxy Fit2"
+    scan_timeout_s:  15
+
 safety:
-  battery_warn_v:          22.0   # warn below this voltage (V)
-  battery_critical_v:      20.5   # hard-block all motion below this (V)
-  max_vx:                   1.5   # forward/backward velocity limit (m/s)
-  max_vy:                   0.8   # lateral velocity limit (m/s)
-  max_vyaw:                 2.0   # yaw rate limit (rad/s)
-  tilt_warn_rad:            0.35  # ~20° — log warning
-  tilt_block_rad:           0.70  # ~40° — hard-block motion
-  special_motion_cooldown:  3.0   # seconds between flips/dances
+  battery_min_voltage:   21.0
+  tilt_limit_deg:        45.0
+  hr_max_bpm:            180
+  hr_critical_max_bpm:   200
+  hr_min_bpm:            40
+  watchdog_timeout_s:    3.0
 
-# ─── Behavior Engine ─────────────────────────────────────────────────────
-behavior:
-  tick_rate_hz: 10.0
-
-# ─── Cognitive Engine ────────────────────────────────────────────────────
-cognitive:
-  enabled: true
-
-# ─── Personality ─────────────────────────────────────────────────────────
-personality:
-  persistence_path: cerberus_personality.json
-  traits:
-    sociability:  0.7    # 0 aloof → 1 very social
-    playfulness:  0.6    # 0 reserved → 1 very playful
-    energy:       0.7    # 0 lethargic → 1 hyperactive
-    curiosity:    0.6    # 0 incurious → 1 very curious
-
-# ─── NLU ─────────────────────────────────────────────────────────────────
-nlu:
-  # Set CERBERUS_OPENAI_API_KEY env var to enable LLM fallback
-  llm_model:    gpt-4o-mini
-  llm_base_url: https://api.openai.com/v1
-
-# ─── Data Logging ────────────────────────────────────────────────────────
 logging:
-  enabled:  true
-  logs_dir: logs
-  max_mb:   50.0    # rotate log file after this many MB
-  compress: true    # gzip compress log files
-
-# ─── Plugins ─────────────────────────────────────────────────────────────
-plugins_dir: plugins
-
-# ─── Server ──────────────────────────────────────────────────────────────
-# Override with env vars: CERBERUS_HOST, CERBERUS_PORT, CERBERUS_DEV=true
-# host: 0.0.0.0
-# port: 8080
+  level: "INFO"

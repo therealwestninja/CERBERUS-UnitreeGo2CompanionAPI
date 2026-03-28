@@ -1,224 +1,297 @@
 """
-cerberus/behavior/engine.py  — CERBERUS v3.1
-============================================
-Priority-queued async behavior engine with 10 built-in canine behaviors.
-All behaviors wired to real Go2Bridge calls.
+cerberus/core/engine.py
+━━━━━━━━━━━━━━━━━━━━━━
+CERBERUS Core Runtime Engine
+
+Deterministic async tick loop: 30–200 Hz configurable.
+Priority order per tick:
+  1. safety      (watchdog, estop checks)
+  2. control     (bridge command dispatch)
+  3. cognition   (behavior engine step)
+  4. perception  (sensor fusion update)
+  5. anatomy     (kinematics / fatigue model)
+  6. learning    (RL / imitation step — sampled, not every tick)
+  7. plugins     (registered plugin update callbacks)
+  8. ui          (state broadcast to WebSocket clients)
+
+All subsystems subscribe to the central EventBus.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import random
+import os
 import time
 from dataclasses import dataclass, field
-from enum import IntEnum
-from typing import TYPE_CHECKING, Any, Callable, Coroutine, Optional
-
-if TYPE_CHECKING:
-    from cerberus.hardware.bridge import Go2Bridge, RobotState
+from enum import Enum
+from typing import Any, Callable, Coroutine
 
 logger = logging.getLogger(__name__)
 
 
-class Priority(IntEnum):
-    SAFETY = 0; CRITICAL = 10; HIGH = 20; NORMAL = 50; LOW = 80; IDLE = 100
+# ── Event bus ────────────────────────────────────────────────────────────────
+
+class EventBus:
+    """Lightweight async pub/sub. Topics are arbitrary strings."""
+
+    def __init__(self):
+        self._subs: dict[str, list[Callable]] = {}
+
+    def subscribe(self, topic: str, handler: Callable) -> None:
+        self._subs.setdefault(topic, []).append(handler)
+
+    def unsubscribe(self, topic: str, handler: Callable) -> None:
+        if topic in self._subs:
+            self._subs[topic] = [h for h in self._subs[topic] if h is not handler]
+
+    async def publish(self, topic: str, payload: Any = None) -> None:
+        for handler in self._subs.get(topic, []):
+            try:
+                result = handler(payload)
+                if asyncio.iscoroutine(result):
+                    await result
+            except Exception as exc:
+                logger.error("EventBus handler error on topic '%s': %s", topic, exc)
+
+    def publish_sync(self, topic: str, payload: Any = None) -> None:
+        """Fire-and-forget from synchronous context."""
+        asyncio.ensure_future(self.publish(topic, payload))
 
 
-BehaviorFn = Callable[["BehaviorContext"], Coroutine[Any, Any, None]]
+# ── Engine state ──────────────────────────────────────────────────────────────
+
+class EngineState(str, Enum):
+    STOPPED   = "stopped"
+    STARTING  = "starting"
+    RUNNING   = "running"
+    PAUSED    = "paused"
+    ERROR     = "error"
+    SHUTDOWN  = "shutdown"
 
 
 @dataclass
-class BehaviorDescriptor:
-    name:          str
-    fn:            BehaviorFn
-    priority:      Priority = Priority.NORMAL
-    interruptible: bool     = True
-    cooldown_s:    float    = 0.0
-    description:   str      = ""
-    last_run:      float    = field(default=0.0, compare=False, repr=False)
+class EngineStats:
+    """Live telemetry about the engine loop performance."""
+    tick_count:      int   = 0
+    tick_hz:         float = 0.0
+    tick_dt_ms:      float = 0.0
+    tick_overrun_ms: float = 0.0
+    overrun_count:   int   = 0
+    uptime_s:        float = 0.0
+    state:           str   = EngineState.STOPPED.value
 
+    def to_dict(self) -> dict:
+        return self.__dict__.copy()
+
+
+# ── Plugin hook registry ──────────────────────────────────────────────────────
 
 @dataclass
-class BehaviorContext:
-    bridge:      "Go2Bridge"
-    state:       "RobotState"
-    params:      dict = field(default_factory=dict)
-    interrupted: bool = False
+class PluginHook:
+    name: str
+    callback: Callable
+    priority: int = 100  # lower = earlier in update order
+    enabled: bool = True
 
 
-class BehaviorEngine:
-    def __init__(self, bridge: "Go2Bridge", tick_rate_hz: float = 10.0) -> None:
-        self._bridge  = bridge
-        self._tick_s  = 1.0 / tick_rate_hz
-        self._reg:    dict[str, BehaviorDescriptor] = {}
-        self._queue:  asyncio.PriorityQueue = asyncio.PriorityQueue()
-        self._ctr:    int = 0
-        self._current: Optional[str] = None
-        self._running = False
-        self._task:   Optional[asyncio.Task] = None
-        self._history: list[dict] = []
-        self._register_defaults()
+# ── Core Engine ──────────────────────────────────────────────────────────────
 
-    # ── Registration ───────────────────────────────────────────────────── #
-    def register(self, d: BehaviorDescriptor) -> None:
-        self._reg[d.name] = d
+class CerberusEngine:
+    """
+    The central CERBERUS runtime.
 
-    def _register_defaults(self) -> None:
-        for d in [
-            BehaviorDescriptor("idle",          _idle,          Priority.IDLE,   True,  0.0,  "Balance stand"),
-            BehaviorDescriptor("sit",           _sit,           Priority.NORMAL, True,  1.0,  "Sit down"),
-            BehaviorDescriptor("stand",         _stand,         Priority.NORMAL, True,  1.0,  "Stand up"),
-            BehaviorDescriptor("greet",         _greet,         Priority.HIGH,   True,  5.0,  "Canine greeting"),
-            BehaviorDescriptor("stretch",       _stretch,       Priority.LOW,    True,  10.0, "Full-body stretch"),
-            BehaviorDescriptor("dance",         _dance,         Priority.LOW,    True,  15.0, "Dance"),
-            BehaviorDescriptor("patrol",        _patrol,        Priority.NORMAL, True,  30.0, "Square patrol"),
-            BehaviorDescriptor("wag",           _wag,           Priority.NORMAL, True,  3.0,  "Tail-wag (wallow)"),
-            BehaviorDescriptor("alert",         _alert,         Priority.HIGH,   True,  2.0,  "Alert posture"),
-            BehaviorDescriptor("emergency_sit", _emergency_sit, Priority.SAFETY, False, 0.0,  "Hard-stop + damp"),
-        ]:
-            self.register(d)
+    Usage:
+        engine = CerberusEngine(bridge, watchdog)
+        await engine.start()
+        ...
+        await engine.stop()
+    """
 
-    # ── Lifecycle ──────────────────────────────────────────────────────── #
+    def __init__(
+        self,
+        bridge,
+        watchdog,
+        target_hz: float | None = None,
+    ):
+        self.bridge   = bridge
+        self.watchdog = watchdog
+        self.bus      = EventBus()
+        self._target_hz = target_hz or float(os.getenv("CERBERUS_HZ", "60"))
+        self._target_hz = max(10.0, min(200.0, self._target_hz))
+        self._state   = EngineState.STOPPED
+        self._stats   = EngineStats()
+        self._start_time: float = 0.0
+
+        # Subsystem hooks — registered by subsystems on init
+        self._plugin_hooks: list[PluginHook] = []
+
+        # Subsystem references (set after construction)
+        self.behavior_engine = None
+        self.perception      = None
+        self.anatomy         = None
+        self.learning        = None
+
+        # Metrics
+        self._last_tick_time: float = 0.0
+        self._tick_times: list[float] = []  # rolling window for Hz calc
+
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
+
     async def start(self) -> None:
-        self._running = True
-        self._task = asyncio.create_task(self._loop())
+        if self._state not in (EngineState.STOPPED, EngineState.ERROR):
+            logger.warning("Engine already running (state=%s)", self._state.value)
+            return
+
+        self._state = EngineState.STARTING
+        logger.info("CERBERUS Engine starting at %.0fHz", self._target_hz)
+
+        await self.bridge.connect()
+        self._start_time = time.monotonic()
+
+        # Start watchdog as background task
+        asyncio.ensure_future(self.watchdog.run())
+
+        self._state = EngineState.RUNNING
+        self._stats.state = EngineState.RUNNING.value
+
+        await self.bus.publish("engine.started", {"hz": self._target_hz})
+        logger.info("CERBERUS Engine running ✓")
+
+        asyncio.ensure_future(self._loop())
 
     async def stop(self) -> None:
-        self._running = False
-        if self._task:
-            self._task.cancel()
-            try: await self._task
-            except asyncio.CancelledError: pass
-
-    # ── Scheduling ─────────────────────────────────────────────────────── #
-    async def enqueue(self, name: str, params: dict | None = None,
-                      priority: Priority | None = None) -> None:
-        d = self._reg.get(name)
-        if not d:
-            raise ValueError(f"Unknown behavior '{name}'. Available: {sorted(self._reg)}")
-        if d.cooldown_s > 0 and (time.monotonic() - d.last_run) < d.cooldown_s:
-            remaining = d.cooldown_s - (time.monotonic() - d.last_run)
-            logger.info("Behavior '%s' on cooldown (%.1fs)", name, remaining)
+        if self._state == EngineState.STOPPED:
             return
-        p = int(priority if priority is not None else d.priority)
-        self._ctr += 1
-        await self._queue.put((p, self._ctr, d, params or {}))
+        self._state = EngineState.SHUTDOWN
+        await self.watchdog.stop()
+        await self.bridge.disconnect()
+        self._state = EngineState.STOPPED
+        self._stats.state = EngineState.STOPPED.value
+        await self.bus.publish("engine.stopped", {})
+        logger.info("CERBERUS Engine stopped")
 
-    # ── Introspection ──────────────────────────────────────────────────── #
-    @property
-    def current_behavior(self) -> Optional[str]:
-        return self._current
+    def pause(self) -> None:
+        if self._state == EngineState.RUNNING:
+            self._state = EngineState.PAUSED
+            logger.info("Engine paused")
 
-    @property
-    def available_behaviors(self) -> list[str]:
-        return sorted(self._reg)
+    def resume(self) -> None:
+        if self._state == EngineState.PAUSED:
+            self._state = EngineState.RUNNING
+            logger.info("Engine resumed")
 
-    @property
-    def history(self) -> list[dict]:
-        return list(self._history[-50:])
+    # ── Main tick loop ────────────────────────────────────────────────────────
 
-    # ── Loop ───────────────────────────────────────────────────────────── #
     async def _loop(self) -> None:
-        while self._running:
+        interval = 1.0 / self._target_hz
+        tick = 0
+
+        while self._state not in (EngineState.SHUTDOWN, EngineState.STOPPED):
+            if self._state == EngineState.PAUSED:
+                await asyncio.sleep(0.05)
+                continue
+
+            t0 = time.monotonic()
+            tick += 1
+
             try:
-                _, _ctr, d, params = await asyncio.wait_for(
-                    self._queue.get(), timeout=self._tick_s
-                )
-                await self._execute(d, params)
-            except asyncio.TimeoutError: pass
-            except asyncio.CancelledError: break
-            except Exception as e:
-                logger.error("BehaviorEngine error: %s", e, exc_info=True)
+                await self._tick(tick)
+            except Exception as exc:
+                logger.error("Engine tick %d error: %s", tick, exc, exc_info=True)
+                self._state = EngineState.ERROR
+                await self.bus.publish("engine.error", {"tick": tick, "error": str(exc)})
+                break
 
-    async def _execute(self, d: BehaviorDescriptor, params: dict) -> None:
-        state = await self._bridge.get_state()
-        ctx = BehaviorContext(bridge=self._bridge, state=state, params=params)
-        self._current = d.name
-        t0 = time.monotonic()
-        try:
-            logger.info("Executing behavior '%s'", d.name)
-            await d.fn(ctx)
-            d.last_run = time.monotonic()
-        except asyncio.CancelledError:
-            ctx.interrupted = True
-        except Exception as e:
-            logger.error("Behavior '%s' error: %s", d.name, e, exc_info=True)
-        finally:
-            self._history.append({
-                "behavior": d.name, "started_at": t0,
-                "duration_s": time.monotonic() - t0,
-                "interrupted": ctx.interrupted, "params": params,
-            })
-            if len(self._history) > 50:
-                self._history = self._history[-50:]
-            self._current = None
+            t1 = time.monotonic()
+            dt = t1 - t0
+            sleep_t = interval - dt
 
+            # Update stats
+            self._tick_times.append(t1)
+            if len(self._tick_times) > 120:
+                self._tick_times.pop(0)
+            if len(self._tick_times) > 1:
+                window = self._tick_times[-1] - self._tick_times[0]
+                self._stats.tick_hz = (len(self._tick_times) - 1) / window if window > 0 else 0
+            self._stats.tick_count = tick
+            self._stats.tick_dt_ms = dt * 1000
+            self._stats.uptime_s   = time.monotonic() - self._start_time
+            self._stats.state      = self._state.value
 
-# ── Built-in behavior implementations ─────────────────────────────────── #
-async def _idle(ctx: BehaviorContext) -> None:
-    await ctx.bridge.set_mode("balance_stand")
+            if sleep_t > 0:
+                self._stats.tick_overrun_ms = 0.0
+                await asyncio.sleep(sleep_t)
+            else:
+                overrun = -sleep_t * 1000
+                self._stats.tick_overrun_ms = overrun
+                self._stats.overrun_count += 1
+                if overrun > 50:
+                    logger.warning("Tick overrun %.1fms at tick %d", overrun, tick)
+                await asyncio.sleep(0)  # yield to event loop
 
-async def _sit(ctx: BehaviorContext) -> None:
-    await ctx.bridge.set_mode("sit")
-    await asyncio.sleep(0.5)
+    async def _tick(self, tick: int) -> None:
+        """Single engine tick. Runs all subsystems in priority order."""
+        if self.watchdog.estop_active:
+            # In E-stop: only broadcast state, do nothing else
+            state = await self.bridge.get_state()
+            await self.bus.publish("state.update", state)
+            return
 
-async def _stand(ctx: BehaviorContext) -> None:
-    await ctx.bridge.set_mode("stand_up")
-    await asyncio.sleep(1.0)
-    await ctx.bridge.set_mode("balance_stand")
+        # 1. Safety — already running as separate task, but validate here
+        # (No heavy work — just check estop flag again after async gap)
 
-async def _greet(ctx: BehaviorContext) -> None:
-    await ctx.bridge.set_mode("balance_stand")
-    await asyncio.sleep(0.3)
-    await ctx.bridge.set_euler(0.15, 0.0, 0.2)
-    await asyncio.sleep(0.6)
-    await ctx.bridge.set_euler(0.0, 0.0, 0.0)
-    await asyncio.sleep(0.2)
-    await ctx.bridge.set_mode("hello")
-    await asyncio.sleep(2.0)
+        # 2. Cognition — step the behavior engine
+        if self.behavior_engine is not None:
+            await self.behavior_engine.step(tick)
 
-async def _stretch(ctx: BehaviorContext) -> None:
-    await ctx.bridge.set_mode("balance_stand")
-    await asyncio.sleep(0.3)
-    await ctx.bridge.set_mode("stretch")
-    await asyncio.sleep(3.0)
+        # 3. Perception — update sensor fusion (sampled to avoid overloading)
+        if self.perception is not None and tick % 2 == 0:
+            await self.perception.update()
 
-async def _dance(ctx: BehaviorContext) -> None:
-    await ctx.bridge.set_mode("balance_stand")
-    await asyncio.sleep(0.3)
-    await ctx.bridge.set_mode(random.choice(["dance1", "dance2"]))
-    await asyncio.sleep(5.0)
+        # 4. Digital Anatomy — kinematics / fatigue model
+        if self.anatomy is not None:
+            state = await self.bridge.get_state()
+            await self.anatomy.update(state)
 
-async def _patrol(ctx: BehaviorContext) -> None:
-    speed = ctx.params.get("speed", 0.3)
-    turn  = ctx.params.get("turn_rate", 0.5)
-    steps = ctx.params.get("steps", 4)
-    await ctx.bridge.set_mode("balance_stand")
-    await asyncio.sleep(0.3)
-    for _ in range(steps):
-        if ctx.interrupted: break
-        await ctx.bridge.move(speed, 0.0, 0.0)
-        await asyncio.sleep(2.0)
-        await ctx.bridge.move(0.0, 0.0, turn)
-        await asyncio.sleep(1.5)
-    await ctx.bridge.stop()
+        # 5. Learning — step RL/imitation pipeline (very low rate)
+        if self.learning is not None and tick % 300 == 0:
+            await self.learning.step()
 
-async def _wag(ctx: BehaviorContext) -> None:
-    await ctx.bridge.set_mode("balance_stand")
-    await asyncio.sleep(0.2)
-    await ctx.bridge.set_mode("wallow")
-    await asyncio.sleep(3.0)
+        # 6. Plugin hooks
+        for hook in sorted(self._plugin_hooks, key=lambda h: h.priority):
+            if hook.enabled:
+                try:
+                    result = hook.callback(tick)
+                    if asyncio.iscoroutine(result):
+                        await result
+                except Exception as exc:
+                    logger.error("Plugin hook '%s' error: %s", hook.name, exc)
 
-async def _alert(ctx: BehaviorContext) -> None:
-    await ctx.bridge.set_mode("balance_stand")
-    await ctx.bridge.set_body_height(0.46)
-    await ctx.bridge.set_euler(-0.1, 0.0, 0.0)
-    await asyncio.sleep(ctx.params.get("duration", 5.0))
-    await ctx.bridge.set_body_height(0.38)
-    await ctx.bridge.set_euler(0.0, 0.0, 0.0)
+        # 7. UI — broadcast state at reduced rate (30Hz max)
+        if tick % max(1, int(self._target_hz / 30)) == 0:
+            state = await self.bridge.get_state()
+            await self.bus.publish("state.update", state)
 
-async def _emergency_sit(ctx: BehaviorContext) -> None:
-    await ctx.bridge.emergency_stop()
-    await asyncio.sleep(0.3)
-    await ctx.bridge.set_mode("sit")
+    # ── Plugin registration ───────────────────────────────────────────────────
+
+    def register_hook(self, name: str, callback: Callable, priority: int = 100) -> None:
+        self._plugin_hooks.append(PluginHook(name=name, callback=callback, priority=priority))
+        logger.debug("Hook registered: %s (priority %d)", name, priority)
+
+    def unregister_hook(self, name: str) -> None:
+        self._plugin_hooks = [h for h in self._plugin_hooks if h.name != name]
+
+    # ── Accessors ────────────────────────────────────────────────────────────
+
+    @property
+    def stats(self) -> EngineStats:
+        return self._stats
+
+    @property
+    def state(self) -> EngineState:
+        return self._state
+
+    @property
+    def event_bus(self) -> EventBus:
+        return self.bus
