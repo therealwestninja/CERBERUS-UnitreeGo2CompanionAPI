@@ -1,0 +1,52 @@
+version: "3.9"
+
+services:
+  cerberus:
+    build: .
+    image: cerberus-go2:3.1.0
+    container_name: cerberus
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/app/config:ro
+      - ./plugins:/app/plugins:ro
+      - ./logs:/app/logs
+      - cerberus_data:/app/data
+    environment:
+      - CERBERUS_HOST=0.0.0.0
+      - CERBERUS_PORT=8080
+      - CERBERUS_CONFIG=config/cerberus.yaml
+      - LOG_LEVEL=INFO
+      # Uncomment for real hardware:
+      # - GO2_TRANSPORT=webrtc
+      # - GO2_ROBOT_IP=192.168.8.1
+      # - CERBERUS_OPENAI_API_KEY=sk-...
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - cerberus_net
+
+  # Optional: Prometheus metrics scraper (uncomment when metrics plugin added)
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   volumes:
+  #     - ./docs/prometheus.yml:/etc/prometheus/prometheus.yml
+  #   ports:
+  #     - "9090:9090"
+  #   networks:
+  #     - cerberus_net
+
+volumes:
+  cerberus_data:
+
+networks:
+  cerberus_net:
+    driver: bridge

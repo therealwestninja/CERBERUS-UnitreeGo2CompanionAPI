@@ -1,66 +1,50 @@
 # CERBERUS — Unitree Go2 Companion API
-# requirements.txt
+# requirements.txt  (v3.1.0)
 # ════════════════════════════════════════════════════════════════════════
 
-# ── Web framework + server ───────────────────────────────────────────────
+# ── Core web stack ───────────────────────────────────────────────────────
 fastapi>=0.111.0,<0.200.0
 uvicorn[standard]>=0.29.0,<0.35.0
 pydantic>=2.7.0,<3.0.0
 python-multipart>=0.0.9        # file uploads
-
-# ── Real-time communication ──────────────────────────────────────────────
 websockets>=12.0,<14.0
-
-# ── HTTP client (fleet manager, OTA, WebRTC signaling) ──────────────────
-aiohttp>=3.9.0,<4.0.0
-
-# ── Configuration + serialization ───────────────────────────────────────
+aiohttp>=3.9.0,<4.0.0          # HTTP client + LLM fallback
 pyyaml>=6.0.1,<7.0.0
 python-dotenv>=1.0.0
+numpy>=1.26.0                  # sensor math
 
-# ── Utilities ────────────────────────────────────────────────────────────
-numpy>=1.26.0                  # kinematics / sensor math
-
-# ══════════════════════════════════════════════════════════════════════════
-# Optional: Unitree SDK2 (Go2 EDU — DDS over CycloneDDS wired Ethernet)
-# Install: pip install unitree_sdk2py
-# Requires cyclonedds==0.10.2 — see README for build instructions
-# ══════════════════════════════════════════════════════════════════════════
-# unitree_sdk2py>=1.0.0
-
-# ══════════════════════════════════════════════════════════════════════════
-# Optional: WebRTC (Go2 AIR / PRO / EDU — Wi-Fi, no jailbreak needed)
-# Install one of:
-#   pip install go2_webrtc_connect          # phospho-app fork (recommended)
-#   pip install unitree_webrtc_connect      # legion1581 original
-# ══════════════════════════════════════════════════════════════════════════
-# go2_webrtc_connect>=1.0.0
-
-# ══════════════════════════════════════════════════════════════════════════
-# Optional: Vision / Perception
-# ══════════════════════════════════════════════════════════════════════════
-# ultralytics>=8.2.0             # YOLOv8/v11 object detection
-# mediapipe>=0.10.0              # pose / landmark detection
-# opencv-python>=4.9.0           # camera capture
-
-# ══════════════════════════════════════════════════════════════════════════
-# Optional: Audio (Go2 Pro/EDU only)
-# ══════════════════════════════════════════════════════════════════════════
-# PyAudio>=0.2.14                # microphone / speaker
-# SpeechRecognition>=3.10.0
-
-# ══════════════════════════════════════════════════════════════════════════
-# Optional: BLE connectivity
-# ══════════════════════════════════════════════════════════════════════════
-# bleak>=0.21.0
-
-# ══════════════════════════════════════════════════════════════════════════
-# Optional: ROS2
-# Install via apt: ros-humble-rclpy (not via pip)
-# ══════════════════════════════════════════════════════════════════════════
-
-# ── Dev / Testing ─────────────────────────────────────────────────────────
+# ── Dev / testing ─────────────────────────────────────────────────────────
 pytest>=8.1.0
 pytest-asyncio>=0.23.0
-httpx>=0.27.0                  # FastAPI async test client
-ruff>=0.4.0                    # linter + formatter
+httpx>=0.27.0
+ruff>=0.4.0
+
+# ════════════════════════════════════════════════════════════════════════
+# OPTIONAL — install the group(s) you need:
+#
+#   Go2 EDU (wired CycloneDDS):
+#     pip install unitree_sdk2py
+#     NOTE: also requires cyclonedds==0.10.2 built from source
+#     See: https://github.com/unitreerobotics/unitree_sdk2_python
+#
+#   Go2 AIR/PRO/EDU Wi-Fi (WebRTC, no jailbreak):
+#     pip install go2_webrtc_connect
+#     OR:  pip install unitree_webrtc_connect
+#
+#   Vision / Perception:
+#     pip install ultralytics mediapipe opencv-python
+#
+#   Audio (Go2 Pro/EDU built-in speaker/mic):
+#     sudo apt install portaudio19-dev
+#     pip install PyAudio SpeechRecognition
+#
+#   LLM NLU fallback (OpenAI-compatible):
+#     pip install openai          # or set CERBERUS_OPENAI_API_KEY
+#     (aiohttp already included above)
+#
+#   ROS2 (optional — install via apt, not pip):
+#     sudo apt install ros-humble-rclpy ros-humble-std-msgs
+# ════════════════════════════════════════════════════════════════════════
+
+# ── Server static file support ─────────────────────────────────────────────
+aiofiles>=23.2.0               # required by FastAPI StaticFiles

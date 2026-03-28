@@ -1,31 +1,50 @@
 """
-backend/api/server.py
-=====================
-CERBERUS FastAPI server.
+backend/api/server.py  — CERBERUS v3.1
+=======================================
+FastAPI server. Endpoints:
 
-Endpoints
----------
-GET  /health                    liveness probe
-GET  /api/v1/state              full robot state snapshot
-POST /api/v1/move               velocity control
-POST /api/v1/stop               stop motion
-POST /api/v1/emergency_stop     hard damp (bypasses queue)
-POST /api/v1/stand              stand_up / stand_down
-POST /api/v1/mode               set named sport mode
-POST /api/v1/config/height      set body height
-POST /api/v1/config/euler       set euler angles
-POST /api/v1/config/speed       set speed level
-POST /api/v1/config/foot_raise  set foot raise height
-POST /api/v1/config/obstacle    toggle obstacle avoidance
-POST /api/v1/vui                set volume / LED brightness
-POST /api/v1/behavior           trigger a named behavior
-GET  /api/v1/behaviors          list available behaviors
-GET  /api/v1/personality        current personality + mood
-POST /api/v1/plugins/load       load a plugin by manifest path
-POST /api/v1/plugins/unload     unload a named plugin
-GET  /api/v1/plugins            list loaded plugins
+System
+  GET  /health
+  GET  /api/v1/state
 
-WS   /ws/telemetry              real-time state at 10 Hz
+Motion
+  POST /api/v1/move
+  POST /api/v1/stop
+  POST /api/v1/emergency_stop
+  POST /api/v1/stand
+
+Mode
+  POST /api/v1/mode
+
+Config
+  POST /api/v1/config/height
+  POST /api/v1/config/euler
+  POST /api/v1/config/speed
+  POST /api/v1/config/foot_raise
+  POST /api/v1/config/obstacle
+  POST /api/v1/vui
+
+Behavior
+  POST /api/v1/behavior
+  GET  /api/v1/behaviors
+
+NLU  (NEW v3.1)
+  POST /api/v1/nlu/command
+
+Personality
+  GET  /api/v1/personality
+
+Data / Replay  (NEW v3.1)
+  GET  /api/v1/sessions
+  POST /api/v1/replay
+
+Plugins
+  GET  /api/v1/plugins
+  POST /api/v1/plugins/load
+  POST /api/v1/plugins/unload
+
+WebSocket
+  WS   /ws/telemetry          10 Hz push + inbound commands
 """
 
 from __future__ import annotations
@@ -35,501 +54,472 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from dataclasses import asdict
 from typing import Any, Optional
 
 import yaml
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
 from cerberus.behavior.engine import BehaviorEngine, Priority
 from cerberus.core.cognitive import CognitiveEngine, Goal, GoalType
-from cerberus.hardware.go2_bridge import (
-    AVAILABLE_MODES,
-    ConnectionState,
-    Go2Bridge,
-    RobotState,
+from cerberus.hardware.bridge import (
+    AVAILABLE_MODES, ConnectionState, Go2Bridge, RobotState,
 )
+from cerberus.learning.data_logger import DataLogger, SessionReplayer
+from cerberus.nlu.interpreter import NLUAction, interpret
 from cerberus.personality.model import PersonalityModel, Traits
 from cerberus.plugins.manager import (
-    PluginContext,
-    PluginManager,
-    PluginManifest,
-    TrustLevel,
+    PluginContext, PluginManager, PluginManifest, TrustLevel,
 )
 from cerberus.safety.gate import SafetyConfig, SafetyGate
+from cerberus.utils.logging_config import configure_logging
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Application-level singletons (created in lifespan)
-# ---------------------------------------------------------------------------
-
-_bridge:    Optional[Go2Bridge]      = None
-_behavior:  Optional[BehaviorEngine] = None
-_cognitive: Optional[CognitiveEngine] = None
+# ── Globals ────────────────────────────────────────────────────────────── #
+_bridge:      Optional[Go2Bridge]       = None
+_behavior:    Optional[BehaviorEngine]  = None
+_cognitive:   Optional[CognitiveEngine] = None
 _personality: Optional[PersonalityModel] = None
-_plugins:   Optional[PluginManager]  = None
-_ws_clients: set[WebSocket] = set()
+_plugins:     Optional[PluginManager]   = None
+_data_logger: Optional[DataLogger]      = None
+_ws_clients:  set[WebSocket]            = set()
 
 
 def _load_config() -> dict:
-    config_path = os.getenv("CERBERUS_CONFIG", "config/cerberus.yaml")
+    path = os.getenv("CERBERUS_CONFIG", "config/cerberus.yaml")
     try:
-        with open(config_path) as f:
+        with open(path) as f:
             return yaml.safe_load(f) or {}
     except FileNotFoundError:
-        logger.warning("Config file not found at %s — using defaults", config_path)
+        logger.warning("Config not found at %s — using defaults", path)
         return {}
 
 
-# ---------------------------------------------------------------------------
-# Lifespan (startup / shutdown)
-# ---------------------------------------------------------------------------
-
+# ── Lifespan ───────────────────────────────────────────────────────────── #
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _bridge, _behavior, _cognitive, _personality, _plugins
+    global _bridge, _behavior, _cognitive, _personality, _plugins, _data_logger
+
+    # Configure structured logging first
+    log_level = os.getenv('LOG_LEVEL', 'INFO')
+    configure_logging(level=log_level)
 
     cfg = _load_config()
-    robot_cfg      = cfg.get("robot", {})
-    behavior_cfg   = cfg.get("behavior", {})
-    personality_cfg= cfg.get("personality", {})
-    safety_cfg_raw = cfg.get("safety", {})
-    plugins_dir    = cfg.get("plugins_dir", "plugins")
+    robot_cfg  = cfg.get("robot", {})
+    beh_cfg    = cfg.get("behavior", {})
+    pers_cfg   = cfg.get("personality", {})
+    safety_raw = cfg.get("safety", {})
 
-    # Safety gate
-    safety = SafetyGate(SafetyConfig(**safety_cfg_raw) if safety_cfg_raw else None)
-
-    # Hardware bridge
+    safety = SafetyGate(SafetyConfig(**safety_raw) if safety_raw else None)
     _bridge = Go2Bridge.from_config(robot_cfg)
     try:
         await _bridge.connect()
         await _bridge.start_watchdog()
-        logger.info("Robot bridge connected")
-    except Exception as exc:
-        logger.error("Bridge connect failed: %s — running in simulation mode", exc)
+    except Exception as e:
+        logger.error("Bridge connect failed: %s — simulation mode", e)
 
-    # Personality
-    traits = Traits(**personality_cfg.get("traits", {})) if "traits" in personality_cfg else None
-    _personality = PersonalityModel(traits=traits,
-                                    persistence_path=personality_cfg.get("persistence_path"))
+    traits = Traits(**pers_cfg.get("traits", {})) if "traits" in pers_cfg else None
+    _personality = PersonalityModel(traits=traits, persistence_path=pers_cfg.get("persistence_path"))
 
-    # Behavior engine
-    _behavior = BehaviorEngine(_bridge, tick_rate_hz=behavior_cfg.get("tick_rate_hz", 10.0))
+    _behavior = BehaviorEngine(_bridge, tick_rate_hz=beh_cfg.get("tick_rate_hz", 10.0))
     await _behavior.start()
 
-    # Cognitive engine
-    _cognitive = CognitiveEngine(_behavior, _personality)
     if cfg.get("cognitive", {}).get("enabled", True):
+        _cognitive = CognitiveEngine(_behavior, _personality)
         await _cognitive.start()
 
-    # Plugin manager
-    _plugins = PluginManager(plugins_dir=plugins_dir)
+    if cfg.get("logging", {}).get("enabled", True):
+        _data_logger = DataLogger(
+            logs_dir=cfg.get("logging", {}).get("logs_dir", "logs"),
+            max_mb=cfg.get("logging", {}).get("max_mb", 50.0),
+        )
+        _data_logger.attach_bridge(_bridge)
+
+    _plugins = PluginManager(plugins_dir=cfg.get("plugins_dir", "plugins"))
     for manifest in _plugins.discover():
         if manifest.enabled:
-            ctx = PluginContext(
-                trust_level=manifest.trust_level,
-                _bridge=_bridge,
-                _behavior=_behavior,
-            )
+            ctx = PluginContext(trust_level=manifest.trust_level,
+                               _bridge=_bridge, _behavior=_behavior)
             try:
                 await _plugins.load(manifest, ctx)
-            except Exception as exc:
-                logger.error("Auto-load plugin '%s' failed: %s", manifest.name, exc)
+            except Exception as e:
+                logger.error("Plugin '%s' load failed: %s", manifest.name, e)
 
-    # State broadcaster
-    asyncio.create_task(_state_broadcaster())
-
-    yield  # ← server runs here
+    asyncio.create_task(_broadcaster())
+    yield
 
     # Shutdown
-    logger.info("CERBERUS shutting down…")
-    if _cognitive:
-        await _cognitive.stop()
-    if _behavior:
-        await _behavior.stop()
-    if _plugins:
-        await _plugins.unload_all()
-    if _bridge:
-        await _bridge.disconnect()
-    if _personality:
-        _personality.save()
+    if _cognitive:   await _cognitive.stop()
+    if _behavior:    await _behavior.stop()
+    if _plugins:     await _plugins.unload_all()
+    if _bridge:      await _bridge.disconnect()
+    if _personality: _personality.save()
+    if _data_logger: _data_logger.close()
 
 
-# ---------------------------------------------------------------------------
-# App instance
-# ---------------------------------------------------------------------------
-
+# ── App ────────────────────────────────────────────────────────────────── #
 app = FastAPI(
     title="CERBERUS — Unitree Go2 Companion API",
-    description=(
-        "Canine-Emulative Responsive Behavioral Engine & Reactive Utility System.\n\n"
-        "Full robot control, behavior, cognitive, personality, and plugin API."
-    ),
-    version="3.0.0",
+    description="Canine-Emulative Responsive Behavioral Engine & Reactive Utility System",
+    version="3.1.0",
     lifespan=lifespan,
 )
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Serve web UI if it exists
+_ui_path = os.path.join(os.path.dirname(__file__), "..", "..", "ui")
+if os.path.isdir(_ui_path):
+    app.mount("/ui", StaticFiles(directory=_ui_path, html=True), name="ui")
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-def _get_bridge() -> Go2Bridge:
-    if _bridge is None:
-        raise HTTPException(503, "Robot bridge not initialised")
+# ── Helpers ────────────────────────────────────────────────────────────── #
+def _br() -> Go2Bridge:
+    if _bridge is None: raise HTTPException(503, "Bridge not ready")
     return _bridge
 
-
-def _get_behavior() -> BehaviorEngine:
-    if _behavior is None:
-        raise HTTPException(503, "Behavior engine not ready")
+def _be() -> BehaviorEngine:
+    if _behavior is None: raise HTTPException(503, "Behavior engine not ready")
     return _behavior
 
-
-async def _state_broadcaster() -> None:
-    """Push state snapshots to all connected WebSocket clients at 10 Hz."""
-    while True:
-        await asyncio.sleep(0.1)
-        if not _ws_clients or _bridge is None:
-            continue
-        try:
-            state = await _bridge.get_state()
-            if _personality:
-                _personality.tick()
-                if _cognitive:
-                    _cognitive.update_from_state(state)
-            payload = _state_to_json(state)
-            dead: set[WebSocket] = set()
-            for ws in _ws_clients:
-                try:
-                    await ws.send_text(payload)
-                except Exception:
-                    dead.add(ws)
-            _ws_clients -= dead
-        except Exception as exc:
-            logger.debug("Broadcaster error: %s", exc)
-
-
-def _state_to_json(state: RobotState) -> str:
-    d = {
-        "timestamp":        state.timestamp,
-        "connection":       state.connection_state.value,
-        "position":         {"x": state.position_x, "y": state.position_y},
-        "orientation":      {"yaw": state.yaw, "pitch": state.pitch, "roll": state.roll},
-        "velocity":         {"vx": state.vx, "vy": state.vy, "vyaw": state.vyaw},
-        "body_height":      state.body_height,
-        "battery":          {"voltage": state.battery_voltage, "percent": state.battery_percent},
-        "foot_force":       state.foot_force,
-        "sport_mode":       state.sport_mode_active,
-        "obstacle_avoid":   state.obstacle_avoidance,
-        "current_mode":     state.current_mode,
-        "latency_ms":       state.latency_ms,
+def _state_json(state: RobotState) -> str:
+    d: dict = {
+        "timestamp":      state.timestamp,
+        "connection":     state.connection_state.value,
+        "position":       {"x": state.position_x, "y": state.position_y},
+        "orientation":    {"yaw": state.yaw, "pitch": state.pitch, "roll": state.roll},
+        "velocity":       {"vx": state.vx, "vy": state.vy, "vyaw": state.vyaw},
+        "body_height":    state.body_height,
+        "battery":        {"voltage": state.battery_voltage, "percent": state.battery_percent},
+        "foot_force":     state.foot_force,
+        "sport_mode":     state.sport_mode_active,
+        "obstacle_avoid": state.obstacle_avoidance,
+        "current_mode":   state.current_mode,
+        "latency_ms":     state.latency_ms,
     }
-    if _personality:
-        d["personality"] = _personality.to_dict()
-    if _behavior:
-        d["current_behavior"] = _behavior.current_behavior
+    if _personality: d["personality"] = _personality.to_dict()
+    if _behavior:    d["current_behavior"] = _behavior.current_behavior
     return json.dumps(d)
 
+async def _broadcaster() -> None:
+    while True:
+        await asyncio.sleep(0.1)
+        if not _ws_clients or _bridge is None: continue
+        try:
+            state = await _bridge.get_state()
+            if _personality: _personality.tick()
+            if _cognitive and _bridge: _cognitive.update_state(state)
+            payload = _state_json(state)
+            dead = set()
+            for ws in _ws_clients:
+                try: await ws.send_text(payload)
+                except: dead.add(ws)
+            _ws_clients -= dead
+        except Exception as e:
+            logger.debug("Broadcaster: %s", e)
 
-# ---------------------------------------------------------------------------
-# Request / Response models
-# ---------------------------------------------------------------------------
 
-class MoveRequest(BaseModel):
-    vx:   float = Field(0.0, ge=-1.5, le=1.5,  description="Forward velocity m/s")
-    vy:   float = Field(0.0, ge=-0.8, le=0.8,  description="Lateral velocity m/s")
-    vyaw: float = Field(0.0, ge=-2.0, le=2.0,  description="Yaw rate rad/s")
+# ── Request models ─────────────────────────────────────────────────────── #
+class MoveReq(BaseModel):
+    vx:   float = Field(0.0, ge=-1.5, le=1.5)
+    vy:   float = Field(0.0, ge=-0.8, le=0.8)
+    vyaw: float = Field(0.0, ge=-2.0, le=2.0)
 
-class StandRequest(BaseModel):
+class StandReq(BaseModel):
     action: str = Field("up", pattern="^(up|down)$")
 
-class ModeRequest(BaseModel):
+class ModeReq(BaseModel):
     mode: str
-
     @field_validator("mode")
     @classmethod
-    def validate_mode(cls, v: str) -> str:
+    def _v(cls, v):
         if v not in AVAILABLE_MODES:
             raise ValueError(f"Unknown mode '{v}'. Valid: {sorted(AVAILABLE_MODES)}")
         return v
 
-class BodyHeightRequest(BaseModel):
-    height: float = Field(..., ge=0.3, le=0.5, description="Body height in metres")
+class HeightReq(BaseModel):
+    height: float = Field(..., ge=0.3, le=0.5)
 
-class EulerRequest(BaseModel):
+class EulerReq(BaseModel):
     roll:  float = Field(0.0, ge=-0.75, le=0.75)
     pitch: float = Field(0.0, ge=-0.75, le=0.75)
     yaw:   float = Field(0.0, ge=-1.5,  le=1.5)
 
-class SpeedRequest(BaseModel):
+class SpeedReq(BaseModel):
     level: int = Field(..., ge=-1, le=1)
 
-class FootRaiseRequest(BaseModel):
+class FootReq(BaseModel):
     height: float = Field(..., ge=-0.06, le=0.03)
 
-class ObstacleRequest(BaseModel):
+class ObstacleReq(BaseModel):
     enabled: bool
 
-class VUIRequest(BaseModel):
+class VUIReq(BaseModel):
     volume:     int = Field(50, ge=0, le=100)
     brightness: int = Field(50, ge=0, le=100)
 
-class BehaviorRequest(BaseModel):
+class BehaviorReq(BaseModel):
     behavior: str
     params:   dict = Field(default_factory=dict)
     priority: int  = Field(50, ge=0, le=100)
 
-class PluginLoadRequest(BaseModel):
+class NLUReq(BaseModel):
+    text: str = Field(..., min_length=1, max_length=500)
+    execute: bool = Field(True, description="Execute the interpreted actions immediately")
+    llm_fallback: bool = Field(False, description="Allow LLM fallback if rule match fails")
+
+class ReplayReq(BaseModel):
+    session_file: str
+    speed: float = Field(1.0, gt=0, le=10.0)
+    actions_only: bool = True
+
+class PluginLoadReq(BaseModel):
     manifest_path: str
 
-class PluginUnloadRequest(BaseModel):
+class PluginUnloadReq(BaseModel):
     name: str
 
 
-# ---------------------------------------------------------------------------
-# Routes — System
-# ---------------------------------------------------------------------------
-
+# ── Routes: System ─────────────────────────────────────────────────────── #
 @app.get("/health", tags=["System"])
 async def health():
-    return {
-        "status":     "ok",
-        "bridge":     _bridge.connected if _bridge else False,
-        "version":    "3.0.0",
-    }
-
+    return {"status": "ok", "bridge": _bridge.connected if _bridge else False, "version": "3.1.0"}
 
 @app.get("/api/v1/state", tags=["Robot"])
 async def get_state():
-    state = await _get_bridge().get_state()
-    return json.loads(_state_to_json(state))
+    return json.loads(_state_json(await _br().get_state()))
 
 
-# ---------------------------------------------------------------------------
-# Routes — Motion
-# ---------------------------------------------------------------------------
-
+# ── Routes: Motion ─────────────────────────────────────────────────────── #
 @app.post("/api/v1/move", tags=["Motion"])
-async def move(req: MoveRequest):
-    await _get_bridge().move(req.vx, req.vy, req.vyaw)
-    return {"status": "ok", "vx": req.vx, "vy": req.vy, "vyaw": req.vyaw}
-
+async def move(r: MoveReq):
+    if _data_logger: _data_logger.log_action("move", r.model_dump())
+    await _br().move(r.vx, r.vy, r.vyaw)
+    return {"status": "ok", **r.model_dump()}
 
 @app.post("/api/v1/stop", tags=["Motion"])
 async def stop():
-    await _get_bridge().stop()
+    if _data_logger: _data_logger.log_action("stop", {})
+    await _br().stop()
     return {"status": "stopped"}
-
 
 @app.post("/api/v1/emergency_stop", tags=["Motion"])
 async def emergency_stop():
-    await _get_bridge().emergency_stop()
+    if _data_logger: _data_logger.log_event("emergency_stop")
+    await _br().emergency_stop()
     if _behavior:
         await _behavior.enqueue("emergency_sit")
     return {"status": "emergency_stop_issued"}
 
-
 @app.post("/api/v1/stand", tags=["Motion"])
-async def stand(req: StandRequest):
-    if req.action == "up":
-        await _get_bridge().stand_up()
-    else:
-        await _get_bridge().stand_down()
-    return {"status": "ok", "action": req.action}
+async def stand(r: StandReq):
+    if _data_logger: _data_logger.log_action("stand", r.model_dump())
+    if r.action == "up": await _br().stand_up()
+    else:                await _br().stand_down()
+    return {"status": "ok", "action": r.action}
 
 
-# ---------------------------------------------------------------------------
-# Routes — Mode
-# ---------------------------------------------------------------------------
-
+# ── Routes: Mode ───────────────────────────────────────────────────────── #
 @app.post("/api/v1/mode", tags=["Mode"])
-async def set_mode(req: ModeRequest):
-    await _get_bridge().set_mode(req.mode)
-    return {"status": "ok", "mode": req.mode}
+async def set_mode(r: ModeReq):
+    if _data_logger: _data_logger.log_action("mode", r.model_dump())
+    await _br().set_mode(r.mode)
+    return {"status": "ok", "mode": r.mode}
 
 
-# ---------------------------------------------------------------------------
-# Routes — Configuration
-# ---------------------------------------------------------------------------
-
+# ── Routes: Config ─────────────────────────────────────────────────────── #
 @app.post("/api/v1/config/height", tags=["Config"])
-async def set_body_height(req: BodyHeightRequest):
-    await _get_bridge().set_body_height(req.height)
-    return {"status": "ok", "body_height": req.height}
-
+async def set_height(r: HeightReq):
+    if _data_logger: _data_logger.log_action("set_body_height", r.model_dump())
+    await _br().set_body_height(r.height)
+    return {"status": "ok", "body_height": r.height}
 
 @app.post("/api/v1/config/euler", tags=["Config"])
-async def set_euler(req: EulerRequest):
-    await _get_bridge().set_euler(req.roll, req.pitch, req.yaw)
-    return {"status": "ok", **req.model_dump()}
-
+async def set_euler(r: EulerReq):
+    await _br().set_euler(r.roll, r.pitch, r.yaw)
+    return {"status": "ok", **r.model_dump()}
 
 @app.post("/api/v1/config/speed", tags=["Config"])
-async def set_speed(req: SpeedRequest):
-    await _get_bridge().set_speed_level(req.level)
-    return {"status": "ok", "level": req.level}
-
+async def set_speed(r: SpeedReq):
+    await _br().set_speed_level(r.level)
+    return {"status": "ok", "level": r.level}
 
 @app.post("/api/v1/config/foot_raise", tags=["Config"])
-async def set_foot_raise(req: FootRaiseRequest):
-    await _get_bridge().set_foot_raise_height(req.height)
-    return {"status": "ok", "foot_raise_height": req.height}
-
+async def set_foot_raise(r: FootReq):
+    await _br().set_foot_raise_height(r.height)
+    return {"status": "ok", "foot_raise_height": r.height}
 
 @app.post("/api/v1/config/obstacle", tags=["Config"])
-async def set_obstacle_avoidance(req: ObstacleRequest):
-    await _get_bridge().set_obstacle_avoidance(req.enabled)
-    return {"status": "ok", "obstacle_avoidance": req.enabled}
-
+async def set_obstacle(r: ObstacleReq):
+    await _br().set_obstacle_avoidance(r.enabled)
+    return {"status": "ok", "obstacle_avoidance": r.enabled}
 
 @app.post("/api/v1/vui", tags=["Config"])
-async def set_vui(req: VUIRequest):
-    await _get_bridge().set_vui(req.volume, req.brightness)
-    return {"status": "ok", "volume": req.volume, "brightness": req.brightness}
+async def set_vui(r: VUIReq):
+    await _br().set_vui(r.volume, r.brightness)
+    return {"status": "ok", "volume": r.volume, "brightness": r.brightness}
 
 
-# ---------------------------------------------------------------------------
-# Routes — Behavior
-# ---------------------------------------------------------------------------
-
+# ── Routes: Behavior ───────────────────────────────────────────────────── #
 @app.post("/api/v1/behavior", tags=["Behavior"])
-async def trigger_behavior(req: BehaviorRequest):
-    beh = _get_behavior()
+async def trigger_behavior(r: BehaviorReq):
+    if _data_logger: _data_logger.log_action("behavior", r.model_dump())
     try:
-        await beh.enqueue(req.behavior, req.params, Priority(req.priority))
-    except ValueError as exc:
-        raise HTTPException(400, str(exc))
-    return {"status": "queued", "behavior": req.behavior}
-
+        await _be().enqueue(r.behavior, r.params, Priority(r.priority))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"status": "queued", "behavior": r.behavior}
 
 @app.get("/api/v1/behaviors", tags=["Behavior"])
 async def list_behaviors():
-    beh = _get_behavior()
+    b = _be()
+    return {"behaviors": b.available_behaviors, "current": b.current_behavior, "history": b.history}
+
+
+# ── Routes: NLU (NEW v3.1) ─────────────────────────────────────────────── #
+@app.post("/api/v1/nlu/command", tags=["NLU"])
+async def nlu_command(r: NLUReq):
+    """
+    Natural-language robot control.
+
+    Parses the text, returns the interpreted actions.
+    When execute=true (default), runs them immediately.
+
+    Example:  {"text": "walk forward slowly"}
+              → move(vx=0.2)
+    """
+    actions: list[NLUAction] = await interpret(
+        r.text, llm_fallback=r.llm_fallback
+    )
+    if _data_logger:
+        _data_logger.log_event("nlu_command", {"text": r.text, "actions": len(actions)})
+
+    executed: list[dict] = []
+    if r.execute and _bridge:
+        for act in actions:
+            try:
+                await _dispatch_nlu_action(act)
+                executed.append({"action": act.action_type, "params": act.params, "confidence": act.confidence})
+            except Exception as e:
+                logger.warning("NLU dispatch error: %s", e)
+
     return {
-        "behaviors": beh.available_behaviors,
-        "current":   beh.current_behavior,
-        "history":   beh.history,
+        "text":    r.text,
+        "actions": [{"action_type": a.action_type, "params": a.params, "confidence": a.confidence} for a in actions],
+        "executed": executed,
     }
 
-
-# ---------------------------------------------------------------------------
-# Routes — Personality
-# ---------------------------------------------------------------------------
-
-@app.get("/api/v1/personality", tags=["Personality"])
-async def get_personality():
-    if not _personality:
-        raise HTTPException(503, "Personality system not ready")
-    return _personality.to_dict()
-
-
-# ---------------------------------------------------------------------------
-# Routes — Plugins
-# ---------------------------------------------------------------------------
-
-@app.get("/api/v1/plugins", tags=["Plugins"])
-async def list_plugins():
-    if not _plugins:
-        raise HTTPException(503, "Plugin manager not ready")
-    return {"plugins": _plugins.status(), "loaded": _plugins.loaded}
-
-
-@app.post("/api/v1/plugins/load", tags=["Plugins"])
-async def load_plugin(req: PluginLoadRequest):
-    if not _plugins or not _bridge or not _behavior:
-        raise HTTPException(503, "Systems not ready")
-    from pathlib import Path
-    try:
-        manifest = PluginManifest.from_yaml(Path(req.manifest_path))
-        ctx = PluginContext(
-            trust_level=manifest.trust_level,
-            _bridge=_bridge,
-            _behavior=_behavior,
-        )
-        await _plugins.load(manifest, ctx)
-    except Exception as exc:
-        raise HTTPException(400, str(exc))
-    return {"status": "loaded", "plugin": manifest.name}
-
-
-@app.post("/api/v1/plugins/unload", tags=["Plugins"])
-async def unload_plugin(req: PluginUnloadRequest):
-    if not _plugins:
-        raise HTTPException(503, "Plugin manager not ready")
-    try:
-        await _plugins.unload(req.name)
-    except Exception as exc:
-        raise HTTPException(400, str(exc))
-    return {"status": "unloaded", "plugin": req.name}
-
-
-# ---------------------------------------------------------------------------
-# WebSocket telemetry
-# ---------------------------------------------------------------------------
-
-@app.websocket("/ws/telemetry")
-async def ws_telemetry(websocket: WebSocket):
-    await websocket.accept()
-    _ws_clients.add(websocket)
-    logger.info("WS client connected (%d total)", len(_ws_clients))
-    try:
-        while True:
-            # Keep connection alive; clients can also send commands
-            data = await websocket.receive_text()
-            try:
-                cmd = json.loads(data)
-                await _handle_ws_command(cmd, websocket)
-            except json.JSONDecodeError:
-                pass
-    except WebSocketDisconnect:
-        pass
-    finally:
-        _ws_clients.discard(websocket)
-        logger.info("WS client disconnected (%d remaining)", len(_ws_clients))
-
-
-async def _handle_ws_command(cmd: dict, ws: WebSocket) -> None:
-    """Handle inbound commands from WS clients."""
-    action = cmd.get("action")
-    if not _bridge:
-        return
-    match action:
+async def _dispatch_nlu_action(act: NLUAction) -> None:
+    if not _bridge: return
+    match act.action_type:
         case "move":
-            await _bridge.move(
-                cmd.get("vx", 0.0),
-                cmd.get("vy", 0.0),
-                cmd.get("vyaw", 0.0),
-            )
+            await _bridge.move(act.params.get("vx",0), act.params.get("vy",0), act.params.get("vyaw",0))
         case "stop":
             await _bridge.stop()
         case "emergency_stop":
             await _bridge.emergency_stop()
         case "mode":
-            if "mode" in cmd:
-                await _bridge.set_mode(cmd["mode"])
+            await _bridge.set_mode(act.params["mode"])
         case "behavior":
-            if _behavior and "behavior" in cmd:
-                await _behavior.enqueue(cmd["behavior"], cmd.get("params", {}))
-        case _:
-            logger.debug("Unknown WS command: %s", action)
+            if _behavior: await _behavior.enqueue(act.params.get("behavior","idle"))
+        case "config":
+            if "height" in act.params: await _bridge.set_body_height(act.params["height"])
+        case "config_obstacle":
+            await _bridge.set_obstacle_avoidance(bool(act.params.get("enabled", True)))
+        case "vui":
+            vol = act.params.get("volume", -1)
+            bri = act.params.get("brightness", -1)
+            await _bridge.set_vui(vol if vol >= 0 else 50, bri if bri >= 0 else 50)
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
+# ── Routes: Personality ────────────────────────────────────────────────── #
+@app.get("/api/v1/personality", tags=["Personality"])
+async def get_personality():
+    if not _personality: raise HTTPException(503, "Personality not ready")
+    return _personality.to_dict()
 
+
+# ── Routes: Data / Replay (NEW v3.1) ───────────────────────────────────── #
+@app.get("/api/v1/sessions", tags=["Data"])
+async def list_sessions():
+    if not _data_logger: return {"sessions": []}
+    return {"sessions": [str(p) for p in _data_logger.list_sessions()]}
+
+@app.post("/api/v1/replay", tags=["Data"])
+async def replay_session(r: ReplayReq):
+    if not _bridge: raise HTTPException(503, "Bridge not ready")
+    from pathlib import Path
+    if not Path(r.session_file).exists():
+        raise HTTPException(404, f"Session file not found: {r.session_file}")
+    replayer = SessionReplayer(r.session_file)
+    asyncio.create_task(replayer.replay(_bridge, speed=r.speed, actions_only=r.actions_only))
+    return {"status": "replay_started", "file": r.session_file, "speed": r.speed}
+
+
+# ── Routes: Plugins ────────────────────────────────────────────────────── #
+@app.get("/api/v1/plugins", tags=["Plugins"])
+async def list_plugins():
+    if not _plugins: raise HTTPException(503, "Plugin manager not ready")
+    return {"plugins": _plugins.status(), "loaded": _plugins.loaded}
+
+@app.post("/api/v1/plugins/load", tags=["Plugins"])
+async def load_plugin(r: PluginLoadReq):
+    if not (_plugins and _bridge and _behavior): raise HTTPException(503, "Systems not ready")
+    from pathlib import Path
+    try:
+        manifest = PluginManifest.from_yaml(Path(r.manifest_path))
+        ctx = PluginContext(trust_level=manifest.trust_level, _bridge=_bridge, _behavior=_behavior)
+        await _plugins.load(manifest, ctx)
+    except Exception as e:
+        raise HTTPException(400, str(e))
+    return {"status": "loaded", "plugin": manifest.name}
+
+@app.post("/api/v1/plugins/unload", tags=["Plugins"])
+async def unload_plugin(r: PluginUnloadReq):
+    if not _plugins: raise HTTPException(503, "Plugin manager not ready")
+    try: await _plugins.unload(r.name)
+    except Exception as e: raise HTTPException(400, str(e))
+    return {"status": "unloaded", "plugin": r.name}
+
+
+# ── WebSocket ──────────────────────────────────────────────────────────── #
+@app.websocket("/ws/telemetry")
+async def ws_telemetry(ws: WebSocket):
+    await ws.accept()
+    _ws_clients.add(ws)
+    logger.info("WS connected (%d total)", len(_ws_clients))
+    try:
+        while True:
+            data = await ws.receive_text()
+            try:
+                cmd = json.loads(data)
+                await _handle_ws_cmd(cmd)
+            except json.JSONDecodeError:
+                pass
+    except WebSocketDisconnect:
+        pass
+    finally:
+        _ws_clients.discard(ws)
+        logger.info("WS disconnected (%d remaining)", len(_ws_clients))
+
+async def _handle_ws_cmd(cmd: dict) -> None:
+    if not _bridge: return
+    match cmd.get("action"):
+        case "move":     await _bridge.move(cmd.get("vx",0), cmd.get("vy",0), cmd.get("vyaw",0))
+        case "stop":     await _bridge.stop()
+        case "emergency_stop": await _bridge.emergency_stop()
+        case "mode":     await _bridge.set_mode(cmd["mode"])
+        case "behavior":
+            if _behavior: await _behavior.enqueue(cmd["behavior"], cmd.get("params",{}))
+        case "nlu":
+            actions = await interpret(cmd.get("text",""), llm_fallback=False)
+            for act in actions:
+                await _dispatch_nlu_action(act)
+
+
+# ── Entry point ────────────────────────────────────────────────────────── #
 def main() -> None:
     import uvicorn
     uvicorn.run(
@@ -539,7 +529,6 @@ def main() -> None:
         reload=os.getenv("CERBERUS_DEV", "false").lower() == "true",
         log_level="info",
     )
-
 
 if __name__ == "__main__":
     main()

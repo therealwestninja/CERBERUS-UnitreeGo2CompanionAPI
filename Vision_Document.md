@@ -1,23 +1,23 @@
 # CERBERUS | Canine-Emulative Responsive Behavioral Engine & Reactive Utility System
-## Vision Document — v3.0
+## Vision Document — v3.1.1
 
 **Repository:** [CERBERUS-UnitreeGo2CompanionAPI](https://github.com/therealwestninja/CERBERUS-UnitreeGo2CompanionAPI)
-**Status:** Active Development — v3.0.0
+**Status:** Active Development — v3.1.1 · 129 Tests Passing
 **Last Updated:** 2026-03-27
 
 ---
 
 ## 1. Project Overview
 
-CERBERUS is **more than a control API**: it is a **cognitive-emulative engine**, a **body-aware motion system**, and a **reactive utility framework** for Unitree Go2 quadrupedal robotics. Its mission is to merge **AI-driven autonomy, physical realism, learning capability, and human-aware interaction** into a single platform.
+CERBERUS is a **cognitive-emulative engine**, a **body-aware motion system**, and a **reactive utility framework** for Unitree Go2 quadrupedal robotics. It merges AI-driven autonomy, physical realism, natural language control, learning, and human-aware interaction into a single extensible platform.
 
 Three pillars:
 
 | Pillar | Description |
 |--------|-------------|
-| **Mind** | Cognitive processing, goal-oriented behavior, learning, and environmental awareness |
-| **Body** | Realistic digital anatomy, kinematics, energy modeling, and stability-aware motion |
-| **System** | Robust plugin-based architecture with observability, simulation, safety, and CI/CD |
+| **Mind** | Cognitive engine, NLU, goal planning, personality, learning |
+| **Body** | All 17 native Go2 sport modes, safety-constrained motion, kinematics |
+| **System** | Plugin ecosystem, REST/WebSocket API, web dashboard, CLI, data logging |
 
 ---
 
@@ -25,218 +25,158 @@ Three pillars:
 
 To create a **self-aware, responsive, and emulative quadruped robotic system** that:
 
-- Demonstrates **realistic canine-like behaviors** while interacting intelligently with users and environments
-- Learns, adapts, and personalizes behavior over time
-- Offers a **fully extensible platform** through a plugin ecosystem
-- Provides **research-grade observability, simulation, and developer tools**
-- Serves as a **modular framework** for further experimentation in AI, robotics, and autonomous systems
+- Responds to plain English ("walk forward slowly", "do a finger heart", "go limp")
+- Demonstrates realistic canine behaviors (greet, wag, stretch, patrol, alert)
+- Learns and personalizes behavior over time via mood adaptation and session logging
+- Provides a fully extensible platform through a sandboxed plugin ecosystem
+- Serves developers, researchers, and enthusiasts with equal ease
 
 ---
 
-## 3. Core Objectives
+## 3. Architecture
 
-1. **Intelligent Autonomy** — Layered decision-making: reactive (20 Hz safety loop), deliberative (1 Hz goal planning), reflective (personality modulation)
-2. **Embodiment & Physical Realism** — Accurate kinematics, COM stability, energy/fatigue modeling, and digital anatomy
-3. **Perception & Understanding** — Sensor fusion and semantic interpretation for objects, environments, and humans
-4. **Learning & Adaptation** — Reinforcement, imitation, and preference-based learning pipelines
-5. **Behavior & Personality** — Behavior trees/hybrid engines, mood and personality states, human-aware modulation
-6. **Extensibility & Plugins** — Modular, sandboxed plugin ecosystem with manifest, versioning, and 4-tier trust model
-7. **Simulation & Observability** — Real-time simulation, debug overlays, event timelines, state inspection, and scenario testing
-8. **Safety, Ethics & Reliability** — Fault-tolerant systems, watchdogs, fallback modes, plugin trust levels, and resource-aware behavior
-9. **Developer Experience** — Quick-start guides, CLI, plugin templates, CI/CD pipelines, and testing workflows
+### 3.1 Transport Layer
 
----
+| Transport | Models | Protocol | Install |
+|-----------|--------|----------|---------|
+| `mock` | — | In-memory | Nothing (default) |
+| `dds` | Go2 EDU | CycloneDDS (Ethernet) | `pip install unitree_sdk2py` |
+| `webrtc` | AIR / PRO / EDU | WebRTC (Wi-Fi) | `pip install go2_webrtc_connect` |
 
-## 4. Architecture
+### 3.2 NLU Coverage (v3.1.1)
 
-### 4.1 Transport Layer (NEW v3.0)
+All 17 Go2 sport modes reachable via rule-based NLU (no LLM required):
 
-CERBERUS now supports **three hardware transports**, selected via `config/cerberus.yaml`:
+| Phrase | Mode / Behavior |
+|--------|----------------|
+| "damp" / "go limp" / "safe park" | `damp` |
+| "stand up" / "get up" | `stand_up` (behavior) |
+| "lie down" / "stand down" | `stand_down` |
+| "sit" / "sit down" | `sit` (behavior) |
+| "rise from sit" / "rise sit" | `rise_sit` |
+| "say hello" / "wave" / "greet" | `hello` (behavior) |
+| "stretch" / "the robot looks tired" | `stretch` (behavior) |
+| "wag your tail" / "wiggle" / "happy" | `wallow` (behavior) |
+| "scrape" / "scrape the ground" | `scrape` |
+| "front flip" / "do a flip" | `front_flip` |
+| "jump" / "leap" | `front_jump` |
+| "pounce" / "front pounce" | `front_pounce` |
+| "dance" / "boogie" | `dance1/2` (behavior) |
+| "finger heart" | `finger_heart` |
+| "go limp" / "damp" | `damp` |
+| "walk forward [slowly/at 0.8 m/s]" | `move(vx)` |
+| "spin left" / "rotate right" | `move(vyaw)` — pure rotation |
+| "go left" / "strafe right" | `move(vy)` — lateral strafe |
+| "emergency stop" | `emergency_stop` |
+| "turn obstacle avoidance on/off" | `config_obstacle` |
+| "turn the lights on" / "dim the lights" | `vui(brightness)` |
+| "volume up" / "turn it down" | `vui(volume)` |
+| "set height to 45cm" | `config(height=0.45)` |
+| "follow me" | `patrol` behavior |
 
-| Transport | Models | Protocol | Notes |
-|-----------|--------|----------|-------|
-| `mock` | — | In-memory | Default; CI/simulation; no hardware needed |
-| `dds` | Go2 EDU | CycloneDDS (Ethernet) | Requires `unitree_sdk2_python` |
-| `webrtc` | AIR / PRO / EDU | WebRTC (Wi-Fi) | Requires `go2_webrtc_connect`; no jailbreak |
+### 3.3 Safety Gate
 
-All transports expose an identical `Go2Bridge` interface — application code is **transport-agnostic**.
+Every motion command validates against SafetyGate — no bypass except `emergency_stop()`:
 
-### 4.2 Safety Gate (ENHANCED v3.0)
+| Guard | Standard (Air/Pro/EDU) | EDU+ (15000mAh) |
+|-------|----------------------|-----------------|
+| Battery warn | 22.0 V | 25.0 V |
+| Battery block | 20.5 V | 23.5 V |
+| Tilt warn | 20° | 20° |
+| Tilt block | 40° | 40° |
+| Max velocity | vx 1.5, vy 0.8, vyaw 2.0 m/s | same |
+| Special motion cooldown | 3 s | 3 s |
 
-Every motion command passes through `SafetyGate` before reaching hardware:
+Use `SafetyConfig.for_edu_plus()` for the 28.8V extended-battery variant.
 
-- **Battery guard** — warn at 22 V, block motion at 20.5 V
-- **Tilt guard** — throttle at 20°, hard block at 40° IMU tilt
-- **Velocity clamp** — hard limits: vx ±1.5 m/s, vy ±0.8 m/s, vyaw ±2.0 rad/s
-- **Special-motion cooldown** — configurable per-mode (default 3 s for flips/dances)
-- **Violation audit log** — all safety blocks logged with counter
-
-### 4.3 Cognitive Architecture (NEW v3.0)
-
-Three-layer decision system:
-
-```
-Layer 3 — Reflective    Personality (mood, traits) → modulates goal selection
-Layer 2 — Deliberative  Goal planner (1 Hz)        → schedules BehaviorEngine calls
-Layer 1 — Reactive      Safety monitor (20 Hz)     → overrides with emergency_sit
-```
-
-### 4.4 Behavior Engine
-
-Priority-queued async executor. 10 built-in canine behaviors, all wired to Go2 SDK:
-
-| Behavior | Description | Maps to |
-|----------|-------------|---------|
-| `idle` | Balance stand | `balance_stand` |
-| `sit` | Sit down | `sit` |
-| `greet` | Head tilt + hello gesture | `euler` + `hello` |
-| `stretch` | Full body stretch | `stretch` |
-| `dance` | Random dance1/dance2 | `dance1`/`dance2` |
-| `patrol` | Square walk loop | `move()` sequence |
-| `wag` | Tail-wag emulation | `wallow` |
-| `alert` | Attentive posture | height + euler |
-| `emergency_sit` | Hard-stop + damp | `emergency_stop()` |
-
-### 4.5 Personality Model
-
-```
-Traits (stable)          Mood (dynamic, decays)
-─────────────────────    ─────────────────────────────
-sociability  0–1         valence  -1 (negative) → +1 (positive)
-playfulness  0–1         arousal   0 (calm)      →  1 (excited)
-energy       0–1
-curiosity    0–1
-```
-
-Mood events: `on_interaction()`, `on_battery_low()`, `on_obstacle()`, `on_task_success()`.
-Persists across restarts via JSON.
-
-### 4.6 Plugin System (ENHANCED v3.0)
-
-4-tier trust model:
-
-| Trust Level | Capabilities |
-|-------------|-------------|
-| `core` | motion + perception + vui + config + admin |
-| `trusted` | motion + perception + vui |
-| `community` | perception (read-only) |
-| `untrusted` | no hardware access |
-
-Plugins are auto-discovered from `plugins/` via `plugin.yaml` manifests.
-
-### 4.7 API Surface (NEW v3.0)
-
-Full REST + WebSocket API via FastAPI:
+### 3.4 Full API Surface
 
 ```
 GET  /health                     Liveness probe
-GET  /api/v1/state               Full robot state snapshot
-POST /api/v1/move                Velocity control (vx, vy, vyaw)
+GET  /api/v1/state               Full robot state (JSON)
+POST /api/v1/move                Velocity control {vx, vy, vyaw}
 POST /api/v1/stop                Stop motion
-POST /api/v1/emergency_stop      Hard damp
-POST /api/v1/stand               stand_up / stand_down
-POST /api/v1/mode                Set named sport mode (17 modes)
-POST /api/v1/config/height       Body height [0.3–0.5 m]
-POST /api/v1/config/euler        Roll/pitch/yaw posture
-POST /api/v1/config/speed        Speed level [-1, 0, 1]
-POST /api/v1/config/foot_raise   Foot raise height
-POST /api/v1/config/obstacle     Toggle obstacle avoidance
-POST /api/v1/vui                 Volume + LED brightness
-POST /api/v1/behavior            Trigger named behavior
-GET  /api/v1/behaviors           List + history
-GET  /api/v1/personality         Traits + mood
+POST /api/v1/emergency_stop      Hard damp (bypasses queue)
+POST /api/v1/stand               {action: "up"|"down"}
+POST /api/v1/mode                {mode: str} — 17 modes
+POST /api/v1/config/height       {height: 0.3–0.5}
+POST /api/v1/config/euler        {roll, pitch, yaw}
+POST /api/v1/config/speed        {level: -1|0|1}
+POST /api/v1/config/foot_raise   {height: -0.06–0.03}
+POST /api/v1/config/obstacle     {enabled: bool}
+POST /api/v1/vui                 {volume: 0-100, brightness: 0-100}
+POST /api/v1/behavior            {behavior: str, params: {}}
+GET  /api/v1/behaviors           List + execution history
+POST /api/v1/nlu/command         {text: str, execute: bool, llm_fallback: bool}
+GET  /api/v1/personality         Traits + mood + mood_label
+GET  /api/v1/sessions            List recorded NDJSON sessions
+POST /api/v1/replay              {session_file: str, speed: float}
 GET  /api/v1/plugins             Plugin status
-POST /api/v1/plugins/load        Load plugin by manifest path
-POST /api/v1/plugins/unload      Unload named plugin
-
-WS   /ws/telemetry               10 Hz state stream; accepts inbound commands
+POST /api/v1/plugins/load        {manifest_path: str}
+POST /api/v1/plugins/unload      {name: str}
+WS   /ws/telemetry               10 Hz push + inbound commands
+GET  /ui/                        Live web dashboard
 ```
 
 ---
 
-## 5. Supported Go2 Modes (Complete List)
+## 4. Deliverables Status
 
-All 17 native sport modes from `unitree_sdk2_python` / `go2_robot` ROS2 service:
-
-`damp` · `balance_stand` · `stop_move` · `stand_up` · `stand_down` · `sit` · `rise_sit` · `hello` · `stretch` · `wallow` · `scrape` · `front_flip` · `front_jump` · `front_pounce` · `dance1` · `dance2` · `finger_heart`
-
----
-
-## 6. Community Integrations Adopted (v3.0)
-
-| Project | What we borrowed |
-|---------|-----------------|
-| `unitree_sdk2_python` (official) | DDS SportClient, VuiClient, ObstaclesAvoidClient |
-| `go2_webrtc_connect` (phospho-app) | WebRTC transport, connection methods, audio channel |
-| `unitree_webrtc_connect` (legion1581) | Fallback WebRTC, serial discovery |
-| `go2_robot` ROS2 (URJC) | Complete mode list, config params, service API design |
-| `go2_ros2_sdk` (abizovnuralem) | SLAM/nav patterns, camera streaming design |
-
----
-
-## 7. Deliverables Status
-
-| Deliverable | Status |
-|-------------|--------|
-| Architecture diagrams | 📋 Planned |
-| Core runtime engine | ✅ Complete (`cerberus/core/`) |
-| Cognitive system | ✅ Complete (`cerberus/core/cognitive.py`) |
-| Hardware bridge (mock + DDS + WebRTC) | ✅ Complete (`cerberus/hardware/go2_bridge.py`) |
-| Safety gate | ✅ Complete (`cerberus/safety/gate.py`) |
-| Behavior engine (10 behaviors) | ✅ Complete (`cerberus/behavior/engine.py`) |
-| Personality system | ✅ Complete (`cerberus/personality/model.py`) |
-| Plugin system | ✅ Complete (`cerberus/plugins/manager.py`) |
-| REST + WebSocket API | ✅ Complete (`backend/api/server.py`) |
-| Configuration system | ✅ Complete (`config/cerberus.yaml`) |
-| Test suite (~50 tests) | ✅ Complete (`tests/test_cerberus.py`) |
-| Perception pipeline | 🚧 Stub (camera, LIDAR, object detection) |
-| Learning system | 🚧 Stub |
-| Simulation environment | 🚧 Partial |
-| Data logging / replay | 📋 Planned |
-| CLI tools | 📋 Planned |
-| UI dashboard | 🚧 Partial |
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| Hardware bridge (DDS + WebRTC + Mock) | ✅ Complete | All 17 modes, auto-reconnect |
+| Safety gate | ✅ Complete | Battery/tilt/velocity/cooldown, EDU+ variant |
+| Cognitive engine (3-layer) | ✅ Complete | Reactive 20Hz, deliberative 1Hz, reflective |
+| Behavior engine (10 behaviors) | ✅ Complete | Priority queue, cooldowns, history |
+| Personality model | ✅ Complete | Traits + mood, JSON persistence |
+| NLU interpreter (rule + LLM) | ✅ Complete | 17/17 modes reachable, 25+ command types |
+| Data logger + replay | ✅ Complete | NDJSON + gzip, SessionReplayer |
+| Plugin system (4-tier trust) | ✅ Complete | Auto-discovery, lifecycle hooks |
+| REST + WebSocket API (21 endpoints) | ✅ Complete | Full Pydantic v2 validation |
+| Web dashboard | ✅ Complete | D-pad, modes, NLU chat, telemetry |
+| CLI tool | ✅ Complete | 10 subcommands, registered entry point |
+| Simulation environment | ✅ Complete | Physics-lite, battery drain, events |
+| Perception pipeline (YOLO/MediaPipe) | 🚧 Stub | Scaffold wired to WebRTC video/LIDAR |
+| Test suite | ✅ 129 tests | 10 test classes, all passing |
+| Documentation | ✅ Complete | README, Architecture, Vision, Changelog |
+| CI/CD (GitHub Actions) | ✅ Complete | Python 3.11+3.12, lint, security, Docker |
+| SLAM / Nav2 integration | 📋 v4.0 | |
+| Reinforcement learning pipeline | 📋 v4.0 | |
+| Voice interface (Whisper + TTS) | 📋 v4.0 | |
 
 ---
 
-## 8. Future Directions (v4.0+)
+## 5. Community Projects Adopted
 
-- **Multi-agent coordination** — swarm behaviors, multi-robot fleet manager
-- **Predictive world modeling** — planning and risk assessment
-- **Voice/NLU integration** — whisper STT + LLM command parsing
-- **Advanced personality evolution** — long-term trait drift from experience
-- **Vision pipeline** — YOLO v11 integration for real-time object/person detection
-- **SLAM navigation** — autonomous map building and waypoint navigation
-- **Architecture diagrams** — system architecture as code (Mermaid)
-
----
-
-## 9. Target Audience
-
-| Audience | Use Case |
-|----------|----------|
-| **Researchers** | Autonomous systems, robotics, AI behavior modeling |
-| **Developers** | Plugin development, system extension, testing AI interactions |
-| **Enthusiasts** | Realistic robotic companions, educational and experimental use |
+| Project | Stars | What CERBERUS borrowed |
+|---------|-------|----------------------|
+| `unitree_sdk2_python` (official) | — | DDS SportClient, VuiClient, ObstaclesAvoidClient, all mode names |
+| `go2_webrtc_connect` (phospho-app) | — | WebRTC transport, AP/STA/remote connection, API IDs |
+| `unitree_webrtc_connect` (legion1581) | — | WebRTC fallback, serial number discovery |
+| `go2_robot` (URJC ROS2) | 285⭐ | Sport service mode list, config params |
+| `unitree-go2-mcp-server` (lpigeon) | 67⭐ | NLU command interpretation pattern |
+| `logging-mp` (Unitree official) | — | Multiprocess-safe structured logging design |
+| Go2 EDU+ spec (2026 hardware) | — | 28.8V / 15000mAh battery thresholds |
 
 ---
 
-## 10. Success Metrics
+## 6. Future Directions (v4.0+)
 
-- Stable runtime on both simulation and real Go2 hardware (all 3 transports)
-- SafetyGate zero-bypass policy (no command reaches hardware without validation)
-- Robust plugin ecosystem with sandboxing, versioning, and trust enforcement
-- Demonstrated adaptive, autonomous, and human-aware behavior
-- Test coverage ≥ 80% (core modules)
-- Community adoption: forks, plugin contributions, research citations
+- **Vision pipeline** — YOLO v11 person tracking, obstacle mapping from LIDAR pointcloud
+- **SLAM navigation** — `go2_ros2_sdk` / RTAB-Map autonomous mapping and waypoint following
+- **Voice interface** — Whisper STT + Go2 built-in speaker TTS (EDU/Pro only)
+- **World model** — leverage Unitree's `unifolm-world-model-action` (903⭐) architecture
+- **RL training** — `unitree_rl_gym` / `unitree_mujoco` sim-to-real pipeline
+- **Multi-agent** — fleet management for swarm behaviors
+- **Personality evolution** — long-term trait drift from interaction history
 
 ---
 
-## 11. Conclusion
+## 7. Success Metrics
 
-**CERBERUS v3.0** delivers the complete **mind–body–system** triad envisioned in the original specification:
-
-- **Mind**: Three-layer cognitive engine + personality + learning hooks
-- **Body**: Unified Go2 bridge (DDS + WebRTC) with full 17-mode support, safety gate, and canine behavior library
-- **System**: Plugin ecosystem with trust enforcement, REST/WebSocket API, comprehensive tests, and CI/CD
-
-It is **modular, extensible, research-grade, and developer-friendly** — and it actually talks to the robot.
+- All 17 sport modes reachable via NLU rules ✅
+- SafetyGate zero-bypass policy enforced ✅
+- 129 tests, all passing ✅
+- Three hardware transports working (mock verified, DDS/WebRTC designed for real hardware)
+- NLU rule interpreter covers all common commands without LLM
+- Plugin ecosystem with trust enforcement end-to-end

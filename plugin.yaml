@@ -7,4 +7,4 @@ capabilities:
   - motion
   - perception
 trust_level: trusted
-enabled: false   # set to true to auto-load on startup
+enabled: false   # set true to auto-load on startup

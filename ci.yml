@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Test & Lint ─────────────────────────────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint (ruff)
+        run: ruff check cerberus/ backend/ tests/
+
+      - name: Run tests
+        run: pytest tests/ -v --asyncio-mode=auto --tb=short
+
+      - name: Upload coverage
+        if: matrix.python-version == '3.11'
+        run: |
+          pip install pytest-cov
+          pytest tests/ --asyncio-mode=auto --cov=cerberus --cov=backend --cov-report=xml
+        continue-on-error: true
+
+  # ── Security scan ───────────────────────────────────────────────────────
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install bandit
+        run: pip install bandit[toml]
+      - name: Security scan
+        run: bandit -r cerberus/ backend/ -ll --quiet
+        continue-on-error: true
+
+  # ── Docker build check ──────────────────────────────────────────────────
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t cerberus-go2:ci .

@@ -1,59 +1,73 @@
-# cerberus.yaml
-# =============
-# CERBERUS — Unitree Go2 Companion API
-# Full configuration reference
-# All settings have sensible defaults; only override what you need.
+# config/cerberus.yaml  — CERBERUS v3.1.0
+# ════════════════════════════════════════════════════════════════════════
+# All settings have sensible defaults — only override what you need.
+# Environment variables (see .env.example) override these values.
+# ════════════════════════════════════════════════════════════════════════
 
-# ─── Robot / Hardware ────────────────────────────────────────────────────────
+# ─── Robot / Hardware ────────────────────────────────────────────────────
 robot:
-  # Transport backend: "mock" | "dds" | "webrtc"
-  # mock    = simulation only; no real hardware needed (default)
-  # dds     = CycloneDDS via unitree_sdk2_python (Go2 EDU, wired ethernet)
-  # webrtc  = Wi-Fi WebRTC (Go2 AIR / PRO / EDU, requires go2_webrtc_connect)
+  # transport: "mock" | "dds" | "webrtc"
+  #
+  #   mock    → in-memory simulation (default — no hardware needed)
+  #   dds     → CycloneDDS via unitree_sdk2_python (Go2 EDU wired Ethernet)
+  #   webrtc  → Wi-Fi WebRTC via go2_webrtc_connect (AIR/PRO/EDU, no jailbreak)
   transport: mock
 
-  # --- DDS settings (transport: dds) ---
-  # network_interface: eth0
+  # ── DDS settings (transport: dds) ──────────────────────────────────────
+  # network_interface: eth0       # network interface connected to robot
 
-  # --- WebRTC settings (transport: webrtc) ---
-  # webrtc_method: local_sta    # ap | local_sta | remote
-  # robot_ip: 192.168.8.1       # direct IP (optional if using serial_number)
-  # serial_number: B42D2000XXXXXXXX
-  # webrtc_username: ""         # required for remote mode
+  # ── WebRTC settings (transport: webrtc) ────────────────────────────────
+  # webrtc_method:   local_sta    # ap | local_sta | remote
+  # robot_ip:        192.168.8.1  # direct IP (leave blank for serial discovery)
+  # serial_number:   B42D2000XXXXXXXX
+  # webrtc_username: ""           # required for remote (TURN server) mode only
   # webrtc_password: ""
 
-# ─── Safety ──────────────────────────────────────────────────────────────────
+# ─── Safety ──────────────────────────────────────────────────────────────
 safety:
-  battery_warn_v:     22.0    # warn below this voltage
-  battery_critical_v: 20.5   # block motion below this
-  max_vx:   1.5               # hard velocity limits (m/s)
-  max_vy:   0.8
-  max_vyaw: 2.0
-  tilt_warn_rad:  0.35        # ~20° tilt: throttle high-speed
-  tilt_block_rad: 0.70        # ~40° tilt: block all motion
-  special_motion_cooldown: 3.0  # seconds between dance/flip moves
+  battery_warn_v:          22.0   # warn below this voltage (V)
+  battery_critical_v:      20.5   # hard-block all motion below this (V)
+  max_vx:                   1.5   # forward/backward velocity limit (m/s)
+  max_vy:                   0.8   # lateral velocity limit (m/s)
+  max_vyaw:                 2.0   # yaw rate limit (rad/s)
+  tilt_warn_rad:            0.35  # ~20° — log warning
+  tilt_block_rad:           0.70  # ~40° — hard-block motion
+  special_motion_cooldown:  3.0   # seconds between flips/dances
 
-# ─── Behavior ────────────────────────────────────────────────────────────────
+# ─── Behavior Engine ─────────────────────────────────────────────────────
 behavior:
   tick_rate_hz: 10.0
 
-# ─── Cognitive Engine ────────────────────────────────────────────────────────
+# ─── Cognitive Engine ────────────────────────────────────────────────────
 cognitive:
   enabled: true
 
-# ─── Personality ─────────────────────────────────────────────────────────────
+# ─── Personality ─────────────────────────────────────────────────────────
 personality:
   persistence_path: cerberus_personality.json
   traits:
-    sociability:  0.7
-    playfulness:  0.6
-    energy:       0.7
-    curiosity:    0.6
+    sociability:  0.7    # 0 aloof → 1 very social
+    playfulness:  0.6    # 0 reserved → 1 very playful
+    energy:       0.7    # 0 lethargic → 1 hyperactive
+    curiosity:    0.6    # 0 incurious → 1 very curious
 
-# ─── Plugins ─────────────────────────────────────────────────────────────────
+# ─── NLU ─────────────────────────────────────────────────────────────────
+nlu:
+  # Set CERBERUS_OPENAI_API_KEY env var to enable LLM fallback
+  llm_model:    gpt-4o-mini
+  llm_base_url: https://api.openai.com/v1
+
+# ─── Data Logging ────────────────────────────────────────────────────────
+logging:
+  enabled:  true
+  logs_dir: logs
+  max_mb:   50.0    # rotate log file after this many MB
+  compress: true    # gzip compress log files
+
+# ─── Plugins ─────────────────────────────────────────────────────────────
 plugins_dir: plugins
 
-# ─── Server ──────────────────────────────────────────────────────────────────
-# Override via env vars: CERBERUS_HOST, CERBERUS_PORT, CERBERUS_DEV
+# ─── Server ──────────────────────────────────────────────────────────────
+# Override with env vars: CERBERUS_HOST, CERBERUS_PORT, CERBERUS_DEV=true
 # host: 0.0.0.0
 # port: 8080

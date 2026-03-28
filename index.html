@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CERBERUS — Go2 Companion Dashboard</title>
+<style>
+  :root {
+    --bg:     #0d1117; --surface: #161b22; --border: #30363d;
+    --text:   #e6edf3; --muted:   #8b949e; --accent:  #58a6ff;
+    --green:  #3fb950; --yellow:  #d29922; --red:     #f85149;
+    --orange: #db6d28; --purple:  #bc8cff;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+
+  /* ── Header ── */
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: .04em; }
+  header .badge { font-size: .7rem; padding: 2px 8px; border-radius: 12px; font-weight: 600; }
+  .badge-connected { background: rgba(63,185,80,.18); color: var(--green); }
+  .badge-disconnected { background: rgba(248,81,73,.18); color: var(--red); }
+  .badge-simulation { background: rgba(88,166,255,.18); color: var(--accent); }
+  header .version { margin-left: auto; color: var(--muted); font-size: .75rem; }
+
+  /* ── Layout ── */
+  main { display: grid; grid-template-columns: 280px 1fr 280px; gap: 12px; padding: 14px; height: calc(100vh - 57px); }
+
+  /* ── Cards ── */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; overflow: hidden; }
+  .card h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 12px; }
+
+  /* ── Left panel ── */
+  .left { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+
+  /* State rows */
+  .stat { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--border); }
+  .stat:last-child { border-bottom: none; }
+  .stat label { color: var(--muted); }
+  .stat value { font-weight: 600; font-family: monospace; }
+
+  /* Battery bar */
+  .batt-bar { height: 6px; background: var(--border); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+  .batt-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+
+  /* Foot force */
+  .foot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .foot-cell { background: var(--bg); border-radius: 4px; padding: 6px; text-align: center; font-size: .75rem; color: var(--muted); }
+  .foot-cell span { display: block; font-size: 1rem; font-weight: 700; color: var(--text); margin-top: 2px; }
+
+  /* Mood */
+  .mood-label { font-size: 1.3rem; font-weight: 700; text-align: center; padding: 6px 0; }
+  .mood-bar-wrap { margin-top: 6px; }
+  .mood-bar-label { font-size: .72rem; color: var(--muted); display: flex; justify-content: space-between; }
+  .mood-bar { height: 5px; background: var(--border); border-radius: 3px; margin: 3px 0 8px; }
+  .mood-fill { height: 100%; border-radius: 3px; transition: width .5s; }
+
+  /* ── Centre panel ── */
+  .centre { display: flex; flex-direction: column; gap: 12px; }
+
+  /* D-pad */
+  .dpad-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .dpad { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 52px); gap: 4px; }
+  .dpad button { background: var(--border); border: none; border-radius: 6px; color: var(--text); font-size: 1.2rem; cursor: pointer; transition: background .12s, transform .08s; }
+  .dpad button:hover  { background: #444c56; }
+  .dpad button:active { background: var(--accent); transform: scale(.94); }
+  .dpad .gap { background: transparent; pointer-events: none; }
+
+  .speed-row { display: flex; align-items: center; gap: 10px; font-size: .8rem; color: var(--muted); }
+  .speed-row input { flex: 1; accent-color: var(--accent); }
+  .speed-row span { min-width: 36px; text-align: right; color: var(--text); font-family: monospace; }
+
+  /* Quick modes */
+  .mode-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .mode-btn { background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-size: .75rem; padding: 8px 4px; cursor: pointer; transition: all .12s; text-align: center; }
+  .mode-btn:hover  { border-color: var(--accent); color: var(--accent); }
+  .mode-btn:active { background: rgba(88,166,255,.12); }
+  .mode-btn.danger { border-color: var(--red); color: var(--red); }
+  .mode-btn.danger:hover { background: rgba(248,81,73,.12); }
+
+  /* Config sliders */
+  .slider-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .slider-row label { width: 90px; color: var(--muted); font-size: .8rem; }
+  .slider-row input[type=range] { flex: 1; accent-color: var(--accent); }
+  .slider-row .val { width: 44px; text-align: right; font-family: monospace; font-size: .8rem; color: var(--text); }
+  .apply-btn { font-size: .8rem; padding: 5px 12px; background: var(--accent); color: #0d1117; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }
+  .apply-btn:hover { opacity: .85; }
+
+  /* ── Right panel ── */
+  .right { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+
+  /* NLU Chat */
+  .chat-log { height: 160px; overflow-y: auto; background: var(--bg); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+  .chat-msg { font-size: .8rem; padding: 4px 8px; border-radius: 4px; max-width: 90%; }
+  .chat-msg.user { align-self: flex-end; background: rgba(88,166,255,.18); color: var(--accent); }
+  .chat-msg.bot  { align-self: flex-start; background: var(--border); color: var(--text); }
+  .chat-msg.error { background: rgba(248,81,73,.18); color: var(--red); }
+  .chat-input { display: flex; gap: 6px; margin-top: 8px; }
+  .chat-input input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 7px 10px; font-size: .82rem; }
+  .chat-input input:focus { outline: none; border-color: var(--accent); }
+  .chat-input button { background: var(--accent); border: none; border-radius: 6px; color: #0d1117; padding: 7px 14px; cursor: pointer; font-weight: 600; font-size: .82rem; }
+
+  /* Behavior buttons */
+  .beh-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .beh-btn { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 8px; font-size: .78rem; cursor: pointer; transition: all .12s; }
+  .beh-btn:hover { border-color: var(--purple); color: var(--purple); }
+
+  /* Behavior history */
+  .history-list { list-style: none; max-height: 120px; overflow-y: auto; }
+  .history-list li { font-size: .75rem; color: var(--muted); padding: 2px 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; }
+  .history-list li span { color: var(--text); }
+
+  /* Emergency */
+  .estop { width: 100%; padding: 12px; font-size: 1rem; font-weight: 800; letter-spacing: .06em;
+    background: var(--red); border: none; border-radius: var(--radius); color: white; cursor: pointer;
+    transition: opacity .12s; text-transform: uppercase; }
+  .estop:hover { opacity: .85; }
+
+  /* Connection indicator dot */
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot-green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot-red    { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+  .dot-yellow { background: var(--yellow); }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="dot dot-red" id="conn-dot"></span>
+  <h1>🐾 CERBERUS</h1>
+  <span class="badge badge-simulation" id="conn-badge">CONNECTING…</span>
+  <span class="version">v3.1.0</span>
+</header>
+
+<main>
+
+  <!-- ═══ LEFT: Telemetry ═══ -->
+  <div class="left">
+
+    <div class="card" id="state-card">
+      <h3>Robot State</h3>
+      <div class="stat"><label>Mode</label>        <value id="s-mode">—</value></div>
+      <div class="stat"><label>Behavior</label>    <value id="s-behavior">—</value></div>
+      <div class="stat"><label>Position</label>    <value id="s-pos">—</value></div>
+      <div class="stat"><label>Velocity</label>    <value id="s-vel">—</value></div>
+      <div class="stat"><label>Body Height</label> <value id="s-height">—</value></div>
+      <div class="stat"><label>Pitch / Roll</label><value id="s-pr">—</value></div>
+      <div class="stat"><label>Obstacle Avoid</label><value id="s-obs">—</value></div>
+    </div>
+
+    <div class="card">
+      <h3>Battery</h3>
+      <div class="stat"><label>Voltage</label><value id="b-voltage">—</value></div>
+      <div class="stat"><label>Level</label>  <value id="b-pct">—</value></div>
+      <div class="batt-bar"><div class="batt-fill" id="b-bar" style="width:0%;background:var(--green)"></div></div>
+    </div>
+
+    <div class="card">
+      <h3>Foot Force (N)</h3>
+      <div class="foot-grid">
+        <div class="foot-cell">FL <span id="ff-0">—</span></div>
+        <div class="foot-cell">FR <span id="ff-1">—</span></div>
+        <div class="foot-cell">RL <span id="ff-2">—</span></div>
+        <div class="foot-cell">RR <span id="ff-3">—</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Personality &amp; Mood</h3>
+      <div class="mood-label" id="mood-label">—</div>
+      <div class="mood-bar-wrap">
+        <div class="mood-bar-label"><span>Valence</span><span id="mood-v-val">—</span></div>
+        <div class="mood-bar"><div class="mood-fill" id="mood-v-bar" style="width:50%;background:var(--green)"></div></div>
+        <div class="mood-bar-label"><span>Arousal</span><span id="mood-a-val">—</span></div>
+        <div class="mood-bar"><div class="mood-fill" id="mood-a-bar" style="width:40%;background:var(--accent)"></div></div>
+      </div>
+    </div>
+
+  </div><!-- /left -->
+
+  <!-- ═══ CENTRE: Controls ═══ -->
+  <div class="centre">
+
+    <!-- D-pad + speed -->
+    <div class="card">
+      <h3>Motion Control</h3>
+      <div class="dpad-wrap">
+        <div class="dpad">
+          <button class="gap"></button>
+          <button title="Forward"  onmousedown="startMove(1,0,0)"  onmouseup="doStop()" ontouchstart="startMove(1,0,0)" ontouchend="doStop()">▲</button>
+          <button class="gap"></button>
+          <button title="Strafe L" onmousedown="startMove(0,1,0)"  onmouseup="doStop()" ontouchstart="startMove(0,1,0)" ontouchend="doStop()">◀</button>
+          <button title="Stop"     onclick="doStop()" style="font-size:.9rem;color:var(--red)">■</button>
+          <button title="Strafe R" onmousedown="startMove(0,-1,0)" onmouseup="doStop()" ontouchstart="startMove(0,-1,0)" ontouchend="doStop()">▶</button>
+          <button title="Turn L"   onmousedown="startMove(0,0,1)"  onmouseup="doStop()" ontouchstart="startMove(0,0,1)" ontouchend="doStop()">↺</button>
+          <button title="Backward" onmousedown="startMove(-1,0,0)" onmouseup="doStop()" ontouchstart="startMove(-1,0,0)" ontouchend="doStop()">▼</button>
+          <button title="Turn R"   onmousedown="startMove(0,0,-1)" onmouseup="doStop()" ontouchstart="startMove(0,0,-1)" ontouchend="doStop()">↻</button>
+        </div>
+        <div class="speed-row">
+          <label>Speed</label>
+          <input type="range" id="speed-slider" min="0.1" max="1.5" step="0.05" value="0.4" oninput="document.getElementById('speed-val').textContent=this.value+'m/s'">
+          <span id="speed-val">0.40m/s</span>
+        </div>
+        <div class="speed-row">
+          <label>Turn rate</label>
+          <input type="range" id="turn-slider" min="0.1" max="2.0" step="0.05" value="0.6" oninput="document.getElementById('turn-val').textContent=this.value+'r/s'">
+          <span id="turn-val">0.60r/s</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick modes -->
+    <div class="card">
+      <h3>Sport Modes</h3>
+      <div class="mode-grid" id="mode-grid">
+        <!-- populated by JS -->
+      </div>
+    </div>
+
+    <!-- Config sliders -->
+    <div class="card">
+      <h3>Configuration</h3>
+      <div class="slider-row">
+        <label>Height (m)</label>
+        <input type="range" id="sl-height" min="0.3" max="0.5" step="0.01" value="0.38" oninput="document.getElementById('v-height').textContent=parseFloat(this.value).toFixed(2)">
+        <span class="val" id="v-height">0.38</span>
+      </div>
+      <div class="slider-row">
+        <label>Volume</label>
+        <input type="range" id="sl-vol" min="0" max="100" value="50" oninput="document.getElementById('v-vol').textContent=this.value">
+        <span class="val" id="v-vol">50</span>
+      </div>
+      <div class="slider-row">
+        <label>Brightness</label>
+        <input type="range" id="sl-bri" min="0" max="100" value="50" oninput="document.getElementById('v-bri').textContent=this.value">
+        <span class="val" id="v-bri">50</span>
+      </div>
+      <button class="apply-btn" onclick="applyConfig()">Apply</button>
+    </div>
+
+    <!-- Emergency -->
+    <button class="estop" onclick="emergencyStop()">⛔ EMERGENCY STOP</button>
+
+  </div><!-- /centre -->
+
+  <!-- ═══ RIGHT: NLU + Behaviors ═══ -->
+  <div class="right">
+
+    <!-- NLU chat -->
+    <div class="card">
+      <h3>🗣 Natural Language Command</h3>
+      <div class="chat-log" id="chat-log"></div>
+      <div class="chat-input">
+        <input type="text" id="chat-input" placeholder="e.g. walk forward slowly…" onkeydown="if(event.key==='Enter')sendNLU()">
+        <button onclick="sendNLU()">Send</button>
+      </div>
+    </div>
+
+    <!-- Behavior buttons -->
+    <div class="card">
+      <h3>Behaviors</h3>
+      <div class="beh-grid" id="beh-grid">
+        <!-- populated by JS -->
+      </div>
+    </div>
+
+    <!-- History -->
+    <div class="card">
+      <h3>Behavior History</h3>
+      <ul class="history-list" id="history-list"></ul>
+    </div>
+
+    <!-- Stand controls -->
+    <div class="card">
+      <h3>Posture</h3>
+      <div style="display:flex;gap:8px">
+        <button class="mode-btn" style="flex:1" onclick="post('/api/v1/stand',{action:'up'})">Stand Up</button>
+        <button class="mode-btn" style="flex:1" onclick="post('/api/v1/stand',{action:'down'})">Stand Down</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="mode-btn" style="flex:1" onclick="post('/api/v1/config/obstacle',{enabled:true})">Obstacle ON</button>
+        <button class="mode-btn" style="flex:1" onclick="post('/api/v1/config/obstacle',{enabled:false})">Obstacle OFF</button>
+      </div>
+    </div>
+
+  </div><!-- /right -->
+
+</main>
+
+<script>
+// ── WebSocket ──────────────────────────────────────────────────────────── //
+const BASE = '';
+let ws, moveInterval, lastState = {};
+
+function wsConnect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws/telemetry`);
+  ws.onopen    = () => setConn('connected');
+  ws.onclose   = () => { setConn('disconnected'); setTimeout(wsConnect, 3000); };
+  ws.onerror   = () => setConn('error');
+  ws.onmessage = e => { try { updateState(JSON.parse(e.data)); } catch{} };
+}
+
+function setConn(state) {
+  const dot   = document.getElementById('conn-dot');
+  const badge = document.getElementById('conn-badge');
+  if (state === 'connected') {
+    dot.className = 'dot dot-green';
+    badge.className = 'badge badge-connected'; badge.textContent = 'CONNECTED';
+  } else if (state === 'disconnected' || state === 'error') {
+    dot.className = 'dot dot-red';
+    badge.className = 'badge badge-disconnected'; badge.textContent = 'DISCONNECTED';
+  }
+}
+
+function updateState(s) {
+  lastState = s;
+  setText('s-mode',     s.current_mode || '—');
+  setText('s-behavior', s.current_behavior || '—');
+  setText('s-pos',      `${fmt(s.position?.x)} / ${fmt(s.position?.y)}`);
+  setText('s-vel',      `${fmt(s.velocity?.vx)} / ${fmt(s.velocity?.vy)} / ${fmt(s.velocity?.vyaw)}`);
+  setText('s-height',   `${fmt(s.body_height)} m`);
+  setText('s-pr',       `${fmt(s.orientation?.pitch)}° / ${fmt(s.orientation?.roll)}°`);
+  setText('s-obs',      s.obstacle_avoid ? '✅ On' : '❌ Off');
+
+  const v = s.battery?.voltage || 0, pct = s.battery?.percent || 0;
+  setText('b-voltage', v > 0 ? `${v.toFixed(2)} V` : '—');
+  setText('b-pct',     pct > 0 ? `${pct.toFixed(0)} %` : '—');
+  const bar = document.getElementById('b-bar');
+  bar.style.width = `${Math.min(100, pct)}%`;
+  bar.style.background = pct > 50 ? 'var(--green)' : pct > 25 ? 'var(--yellow)' : 'var(--red)';
+
+  if (Array.isArray(s.foot_force)) {
+    s.foot_force.forEach((f,i) => setText(`ff-${i}`, f.toFixed(1)));
+  }
+
+  if (s.personality) {
+    const p = s.personality;
+    setText('mood-label', p.mood_label || '—');
+    const vNorm = ((p.mood?.valence ?? 0) + 1) / 2 * 100;
+    const aNorm = (p.mood?.arousal  ?? 0) * 100;
+    document.getElementById('mood-v-bar').style.width = `${vNorm}%`;
+    document.getElementById('mood-a-bar').style.width = `${aNorm}%`;
+    setText('mood-v-val', (p.mood?.valence ?? 0).toFixed(2));
+    setText('mood-a-val', (p.mood?.arousal  ?? 0).toFixed(2));
+  }
+}
+
+function setText(id, v) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = v;
+}
+function fmt(n) { return (typeof n === 'number') ? n.toFixed(2) : '—'; }
+
+// ── API helpers ────────────────────────────────────────────────────────── //
+async function post(path, body = {}) {
+  try {
+    const r = await fetch(BASE + path, {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    return r.json();
+  } catch(e) { console.error(path, e); }
+}
+
+// ── Motion ─────────────────────────────────────────────────────────────── //
+function startMove(vxDir, vyDir, vyawDir) {
+  if (moveInterval) clearInterval(moveInterval);
+  moveInterval = setInterval(() => {
+    const sp = parseFloat(document.getElementById('speed-slider').value);
+    const tr = parseFloat(document.getElementById('turn-slider').value);
+    const cmd = { action:'move', vx: vxDir*sp, vy: vyDir*sp, vyaw: vyawDir*tr };
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify(cmd));
+  }, 100);
+}
+
+function doStop() {
+  clearInterval(moveInterval);
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({action:'stop'}));
+}
+
+function emergencyStop() {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({action:'emergency_stop'}));
+  post('/api/v1/emergency_stop');
+}
+
+// ── Mode buttons ───────────────────────────────────────────────────────── //
+const MODES = [
+  ['balance_stand','Balance'],['sit','Sit'],['rise_sit','Rise'],
+  ['hello','Hello'],['stretch','Stretch'],['wallow','Wag'],
+  ['dance1','Dance 1'],['dance2','Dance 2'],['finger_heart','Heart'],
+  ['scrape','Scrape'],['front_flip','Flip ⚠️'],['damp','Damp ⚠️'],
+];
+
+function populateModes() {
+  const grid = document.getElementById('mode-grid');
+  MODES.forEach(([mode, label]) => {
+    const btn = document.createElement('button');
+    btn.className = 'mode-btn' + (mode==='damp'||mode==='front_flip'?' danger':'');
+    btn.textContent = label;
+    btn.onclick = () => post('/api/v1/mode', {mode});
+    grid.appendChild(btn);
+  });
+}
+
+// ── Config apply ───────────────────────────────────────────────────────── //
+function applyConfig() {
+  const h   = parseFloat(document.getElementById('sl-height').value);
+  const vol = parseInt(document.getElementById('sl-vol').value);
+  const bri = parseInt(document.getElementById('sl-bri').value);
+  post('/api/v1/config/height', {height: h});
+  post('/api/v1/vui', {volume: vol, brightness: bri});
+}
+
+// ── Behavior buttons ───────────────────────────────────────────────────── //
+const BEHAVIORS = ['idle','sit','stand','greet','stretch','dance','patrol','wag','alert'];
+
+function populateBehaviors() {
+  const grid = document.getElementById('beh-grid');
+  BEHAVIORS.forEach(b => {
+    const btn = document.createElement('button');
+    btn.className = 'beh-btn';
+    btn.textContent = b.charAt(0).toUpperCase() + b.slice(1);
+    btn.onclick = () => {
+      post('/api/v1/behavior', {behavior: b});
+      addChat('bot', `▶ ${b}`);
+    };
+    grid.appendChild(btn);
+  });
+}
+
+// ── NLU chat ───────────────────────────────────────────────────────────── //
+function addChat(type, text) {
+  const log = document.getElementById('chat-log');
+  const msg = document.createElement('div');
+  msg.className = `chat-msg ${type}`;
+  msg.textContent = text;
+  log.appendChild(msg);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function sendNLU() {
+  const inp = document.getElementById('chat-input');
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = '';
+  addChat('user', text);
+
+  const data = await post('/api/v1/nlu/command', {text, execute: true, llm_fallback: false});
+  if (data && data.actions) {
+    const actStr = data.actions.map(a => `${a.action_type}(${JSON.stringify(a.params)})`).join(', ');
+    addChat('bot', `→ ${actStr || 'no action'} (conf: ${(data.actions[0]?.confidence||0).toFixed(2)})`);
+  } else {
+    addChat('error', 'No response from server');
+  }
+}
+
+// ── Behavior history polling ───────────────────────────────────────────── //
+async function refreshHistory() {
+  try {
+    const data = await fetch(BASE + '/api/v1/behaviors').then(r => r.json());
+    const list = document.getElementById('history-list');
+    list.innerHTML = '';
+    (data.history || []).slice(-10).reverse().forEach(h => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span>${h.behavior}</span> ${h.duration_s?.toFixed(2)}s`;
+      list.appendChild(li);
+    });
+  } catch{}
+}
+
+// ── Keyboard shortcuts ─────────────────────────────────────────────────── //
+document.addEventListener('keydown', e => {
+  if (document.activeElement.tagName === 'INPUT') return;
+  const sp = parseFloat(document.getElementById('speed-slider').value);
+  const tr = parseFloat(document.getElementById('turn-slider').value);
+  switch(e.key) {
+    case 'ArrowUp':    case 'w': startMove( 1, 0, 0); e.preventDefault(); break;
+    case 'ArrowDown':  case 's': startMove(-1, 0, 0); e.preventDefault(); break;
+    case 'ArrowLeft':  case 'a': startMove( 0, 0, 1); e.preventDefault(); break;
+    case 'ArrowRight': case 'd': startMove( 0, 0,-1); e.preventDefault(); break;
+    case ' ': doStop(); e.preventDefault(); break;
+    case 'e': case 'E': emergencyStop(); break;
+  }
+});
+document.addEventListener('keyup', e => {
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d'].includes(e.key)) doStop();
+});
+
+// ── Init ───────────────────────────────────────────────────────────────── //
+populateModes();
+populateBehaviors();
+wsConnect();
+setInterval(refreshHistory, 3000);
+</script>
+</body>
+</html>
