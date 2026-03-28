@@ -252,6 +252,10 @@ class BehaviorEngine:
         self._boredom_timer    = time.monotonic()
         self._active_behavior  = "idle"
 
+        # Session statistics — accumulated this engine run, saved by SessionStore
+        from cerberus.cognitive.session_store import SessionStats
+        self._session_stats = SessionStats()
+
         # Build behavior tree
         self._tree = self._build_tree()
 
@@ -272,11 +276,23 @@ class BehaviorEngine:
         reactive = Sequence("reactive_layer", [estop_check, obstacle_avoid])
 
         # ── Deliberative layer (Layer 2) ──────────────────────────────────────
+        from cerberus.bridge.go2_bridge import SportMode as _SportMode
+
+        # Goal-driven sub-tree: consume the highest-priority pending goal.
+        # Goals are dispatched by name → action mapping. Unknown goal names
+        # are logged and popped so they don't block the queue forever.
+        goal_dispatch = Sequence("goal_dispatch", [
+            Condition("has_goal", lambda ctx: ctx.get("pending_goal") is not None),
+            Action("execute_goal", lambda ctx: asyncio.ensure_future(
+                self._execute_goal(ctx["pending_goal"])
+            )),
+        ])
+
         greet_human = Sequence("greet_human", [
             Condition("human_detected", lambda ctx: ctx.get("human_detected", False)),
             Condition("not_greeted_recently", lambda ctx: ctx.get("last_greet_elapsed", 999) > 30),
             Action("hello_wave", lambda ctx: asyncio.ensure_future(bridge.execute_sport_mode(
-                __import__("cerberus.bridge.go2_bridge", fromlist=["SportMode"]).SportMode.HELLO
+                _SportMode.HELLO
             ))),
         ])
 
@@ -289,7 +305,11 @@ class BehaviorEngine:
             Action("idle_stand", lambda ctx: None),
         ])
 
+        # Goal dispatch has highest priority in the deliberative layer —
+        # it runs before greet and explore so operator commands preempt
+        # autonomous social behavior.
         deliberative = Selector("deliberative_layer", [
+            goal_dispatch,
             greet_human,
             explore_idle,
         ])
@@ -323,6 +343,10 @@ class BehaviorEngine:
             "boredom_level": self._compute_boredom(now),
             "uptime_min": (now - self._boredom_timer) / 60.0,
             "active_behavior": self._active_behavior,
+            # Expose the highest-priority pending goal (if any) to the BT.
+            # peek() removes expired goals but does NOT pop — the goal persists
+            # until _execute_goal() explicitly calls self.goals.pop().
+            "pending_goal": self.goals.peek(),
         }
 
         # Run behavior tree
@@ -362,6 +386,85 @@ class BehaviorEngine:
             logger.info("Behavior transition: %s → %s", self._active_behavior, name)
             self._active_behavior = name
             self._boredom_timer = time.monotonic()
+        if name == "exploring":
+            self._session_stats.explore_ticks += 1
+
+    async def _execute_goal(self, goal: Goal) -> None:
+        """
+        Execute a goal by name and pop it from the queue.
+
+        Supported goal names map to bridge or sport mode commands.
+        Unknown names are logged and popped to prevent queue starvation.
+
+        Goal params (optional, passed as kwargs to push_goal):
+          move:       vx, vy, vyaw  (floats)
+          move_timed: vx, vy, vyaw, duration_s (float)
+          height:     offset (float, relative m)
+        """
+        from cerberus.bridge.go2_bridge import SportMode
+
+        name = goal.name.lower().strip()
+        logger.info("Executing goal: '%s' (priority=%.2f)", name, goal.priority)
+        self._set_behavior(f"goal:{name}")
+
+        SPORT_MODE_GOALS = {
+            "sit": SportMode.SIT,
+            "stand_up": SportMode.STAND_UP,
+            "stand_down": SportMode.STAND_DOWN,
+            "hello": SportMode.HELLO,
+            "stretch": SportMode.STRETCH,
+            "dance": SportMode.DANCE1,
+            "dance1": SportMode.DANCE1,
+            "dance2": SportMode.DANCE2,
+            "wallow": SportMode.WALLOW,
+            "scrape": SportMode.SCRAPE,
+            "front_flip": SportMode.FRONT_FLIP,
+            "front_jump": SportMode.FRONT_JUMP,
+            "pounce": SportMode.FRONT_POUNCE,
+            "finger_heart": SportMode.FINGER_HEART,
+            "balance_stand": SportMode.BALANCE_STAND,
+            "rise_sit": SportMode.RISE_SIT,
+        }
+
+        try:
+            if name in SPORT_MODE_GOALS:
+                await self.bridge.execute_sport_mode(SPORT_MODE_GOALS[name])
+
+            elif name == "stop":
+                await self.bridge.stop_move()
+
+            elif name == "move":
+                vx   = float(goal.params.get("vx", 0.0))
+                vy   = float(goal.params.get("vy", 0.0))
+                vyaw = float(goal.params.get("vyaw", 0.0))
+                await self.bridge.move(vx, vy, vyaw)
+
+            elif name == "move_timed":
+                vx       = float(goal.params.get("vx", 0.0))
+                vy       = float(goal.params.get("vy", 0.0))
+                vyaw     = float(goal.params.get("vyaw", 0.0))
+                duration = float(goal.params.get("duration_s", 2.0))
+                await self.bridge.move(vx, vy, vyaw)
+                await asyncio.sleep(max(0.1, min(30.0, duration)))
+                await self.bridge.stop_move()
+
+            elif name == "height":
+                offset = float(goal.params.get("offset", 0.0))
+                await self.bridge.set_body_height(offset)
+
+            elif name == "explore":
+                self._set_behavior("exploring")
+
+            else:
+                logger.warning("Unknown goal name '%s' — popping to avoid starvation", name)
+
+        except Exception as exc:
+            logger.error("Goal '%s' execution error: %s", name, exc)
+        finally:
+            # Always pop regardless of outcome so we don't get stuck
+            self.goals.pop()
+            self._set_behavior("idle")
+            self._session_stats.goals_completed += 1
 
     async def _play_behavior(self) -> None:
         from cerberus.bridge.go2_bridge import SportMode
@@ -370,6 +473,7 @@ class BehaviorEngine:
         logger.info("Play behavior: %s", chosen.value)
         await self.bridge.execute_sport_mode(chosen)
         self._boredom_timer = time.monotonic()
+        self._session_stats.play_behaviors += 1
 
     # ── External perception input ─────────────────────────────────────────────
 
@@ -377,6 +481,7 @@ class BehaviorEngine:
         self.memory.set("human_detected", detected, ttl_s=5.0)
         if detected:
             self.memory.set("last_greet_time", time.monotonic(), ttl_s=60.0)
+            self._session_stats.human_interactions += 1
 
     def on_obstacle_detected(self, detected: bool) -> None:
         self.memory.set("obstacle_near", detected, ttl_s=2.0)

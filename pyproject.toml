@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cerberus-go2"
-version = "2.1.0"
+version = "2.8.0"
 description = "CERBERUS — Canine-Emulative Responsive Behavioral Engine & Reactive Utility System for the Unitree Go2"
 readme = "Readme.md"
 license = { text = "MIT" }
@@ -33,15 +33,25 @@ vision = [
 sim = [
     "mujoco>=3.1.0",
 ]
+mujoco = [
+    "mujoco>=3.1.0",
+]
+voice = [
+    "openai-whisper>=20231117",
+    "sounddevice>=0.4.6",
+    "torch>=2.0.0",
+    "numpy>=1.26.0",
+]
 ble = ["bleak>=0.21.0"]
 dev = [
     "pytest>=8.1.0",
     "pytest-asyncio>=0.23.0",
     "httpx>=0.27.0",
+    "asgi-lifespan>=2.1.0",
     "ruff>=0.4.0",
 ]
 all = [
-    "cerberus-go2[vision,sim,ble,dev]",
+    "cerberus-go2[vision,mujoco,voice,ble,dev]",
 ]
 
 [project.scripts]

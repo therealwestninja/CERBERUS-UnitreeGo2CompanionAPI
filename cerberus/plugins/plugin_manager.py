@@ -58,22 +58,25 @@ class TrustLevel(str, Enum):
 # ── Capability set ────────────────────────────────────────────────────────────
 
 ALL_CAPABILITIES = {
-    "read_state",       # Read robot sensor state
-    "control_motion",   # Send movement commands
-    "control_led",      # LED / visual
-    "control_audio",    # Speaker / volume
-    "execute_sport",    # Sport mode commands
-    "access_memory",    # Read/write working memory
-    "publish_events",   # Publish to event bus
-    "access_network",   # Outbound HTTP/WebSocket
-    "access_filesystem",# Read/write local files
-    "low_level_control",# Direct joint commands (requires TRUSTED)
+    "read_state",        # Read robot sensor state
+    "control_motion",    # Send movement commands (move, stop, body_height)
+    "control_gait",      # Gait mode / foot-raise / speed-level commands
+    "control_led",       # LED / visual
+    "control_audio",     # Speaker / volume
+    "execute_sport",     # Sport mode commands
+    "access_memory",     # Read/write working memory
+    "publish_events",    # Publish to event bus
+    "access_network",    # Outbound HTTP/WebSocket
+    "access_filesystem", # Read/write local files
+    "modify_safety_limits", # Adjust watchdog SafetyLimits at runtime (TRUSTED only)
+    "low_level_control", # Direct joint commands (requires TRUSTED)
 }
 
 TRUST_CAPABILITY_MAP = {
     TrustLevel.TRUSTED:    ALL_CAPABILITIES,
-    TrustLevel.COMMUNITY:  {"read_state", "control_motion", "control_led",
-                             "control_audio", "execute_sport", "publish_events"},
+    TrustLevel.COMMUNITY:  {"read_state", "control_motion", "control_gait",
+                             "control_led", "control_audio", "execute_sport",
+                             "publish_events"},
     TrustLevel.UNTRUSTED:  {"read_state"},
 }
 
@@ -131,6 +134,13 @@ class CerberusPlugin:
     async def on_event(self, topic: str, payload: Any) -> None:
         """Called when a subscribed event fires."""
 
+    # ── Convenience property ─────────────────────────────────────────────────
+
+    @property
+    def bridge(self):
+        """Direct reference to the engine's bridge (read-only shorthand)."""
+        return self.engine.bridge
+
     # ── Sandboxed capability check ────────────────────────────────────────────
 
     def _require_capability(self, cap: str) -> None:
@@ -146,7 +156,7 @@ class CerberusPlugin:
                 f"cannot use capability '{cap}'."
             )
 
-    # ── Safe bridge wrappers ──────────────────────────────────────────────────
+    # ── Safe bridge wrappers — motion ─────────────────────────────────────────
 
     async def move(self, vx: float, vy: float, vyaw: float) -> bool:
         self._require_capability("control_motion")
@@ -156,13 +166,45 @@ class CerberusPlugin:
         self._require_capability("control_motion")
         return await self.engine.bridge.stop_move()
 
+    async def set_body_height(self, height: float) -> bool:
+        self._require_capability("control_motion")
+        return await self.engine.bridge.set_body_height(height)
+
     async def get_state(self):
         self._require_capability("read_state")
         return await self.engine.bridge.get_state()
 
+    # ── Safe bridge wrappers — gait ───────────────────────────────────────────
+
+    async def switch_gait(self, gait_id: int) -> bool:
+        self._require_capability("control_gait")
+        return await self.engine.bridge.switch_gait(gait_id)
+
+    async def set_foot_raise_height(self, height: float) -> bool:
+        self._require_capability("control_gait")
+        return await self.engine.bridge.set_foot_raise_height(height)
+
+    async def set_speed_level(self, level: int) -> bool:
+        self._require_capability("control_gait")
+        return await self.engine.bridge.set_speed_level(level)
+
+    # ── Safe bridge wrappers — sport / LED ────────────────────────────────────
+
+    async def execute_sport_mode(self, mode) -> bool:
+        self._require_capability("execute_sport")
+        return await self.engine.bridge.execute_sport_mode(mode)
+
+    async def set_led(self, r: int, g: int, b: int) -> bool:
+        self._require_capability("control_led")
+        return await self.engine.bridge.set_led(r, g, b)
+
+    # ── EventBus ──────────────────────────────────────────────────────────────
+
     async def publish(self, topic: str, payload: Any) -> None:
         self._require_capability("publish_events")
         await self.engine.bus.publish(topic, payload)
+
+    # ── Memory ────────────────────────────────────────────────────────────────
 
     def read_memory(self, key: str, default=None):
         self._require_capability("access_memory")
@@ -221,8 +263,13 @@ class PluginManager:
                 logger.debug("Plugin dir %s not found, skipping", plugin_dir)
                 continue
             for candidate in sorted(plugin_dir.iterdir()):
+                # Skip hidden dirs, __pycache__, __init__, and other dunder dirs
+                if candidate.name.startswith("_") or candidate.name.startswith("."):
+                    continue
                 plugin_file = candidate / "plugin.py" if candidate.is_dir() else candidate
                 if plugin_file.suffix != ".py" or plugin_file.name.startswith("_"):
+                    continue
+                if not plugin_file.exists():
                     continue
                 try:
                     if await self.load_from_file(plugin_file):
@@ -234,14 +281,28 @@ class PluginManager:
 
     async def load_from_file(self, path: Path) -> bool:
         """Load a single plugin file. Returns True on success."""
-        spec = importlib.util.spec_from_file_location(path.stem, path)
+        # Build a unique module name from the parent directory + stem so that
+        # two plugins both named 'plugin.py' in different directories don't
+        # collide. The name MUST be passed to spec_from_file_location — setting
+        # module.__name__ after creation causes the loader to reject it.
+        unique_name = f"cerberus_plugin_{path.parent.name}_{path.stem}"
+        spec = importlib.util.spec_from_file_location(unique_name, path)
         if spec is None or spec.loader is None:
             raise ImportError(f"Cannot create spec for {path}")
 
         module = importlib.util.module_from_spec(spec)
-        # Sandboxed: don't pollute sys.modules namespace
-        module.__name__ = f"cerberus_plugin_{path.stem}"
-        spec.loader.exec_module(module)
+        # Register under the unique name BEFORE exec_module.
+        # Python's @dataclass decorator (and TYPE_CHECKING) resolve
+        # cls.__module__ via sys.modules at class-definition time — if the
+        # module isn't registered, @dataclass raises AttributeError on NoneType.
+        # The unique_name prefix keeps this sandboxed from the real import tree.
+        sys.modules[unique_name] = module
+        try:
+            spec.loader.exec_module(module)
+        except Exception:
+            # Clean up on load failure
+            sys.modules.pop(unique_name, None)
+            raise
 
         # Find CerberusPlugin subclass
         plugin_cls = None
@@ -292,8 +353,39 @@ class PluginManager:
             for topic in getattr(manifest, "subscribed_topics", []):
                 self.engine.bus.subscribe(topic, lambda p, t=topic: plugin.on_event(t, p))
 
+        # Register engine tick hook immediately — this handles plugins loaded
+        # after the initial register_with_engine() call (e.g. via POST /plugins).
+        # (Bug: without this, dynamically loaded plugins are never ticked.)
+        self._register_hook_for_record(name, record)
+
         logger.info("Plugin loaded: %s v%s [trust=%s]", name, manifest.version, manifest.trust.value)
         return True
+
+    def _register_hook_for_record(self, name: str, record: "PluginRecord") -> None:
+        """Register a single plugin's tick hook with the engine."""
+        hook_name  = f"plugin_{name}"
+        max_errors = self._max_errors
+
+        # Respect the plugin class's HOOK_PRIORITY attribute.
+        # Lower values run earlier in the tick (same as engine hook ordering).
+        # Default 100 keeps the historical behaviour.
+        priority = getattr(record.plugin.__class__, "HOOK_PRIORITY", 100)
+
+        async def _hook(tick: int, rec: PluginRecord = record) -> None:
+            if not rec.plugin._enabled:
+                return
+            try:
+                await rec.plugin.on_tick(tick)
+            except Exception as exc:
+                rec.error_count += 1
+                rec.plugin._error_count += 1
+                logger.error("Plugin '%s' tick error (%d/%d): %s",
+                             rec.manifest.name, rec.error_count, max_errors, exc)
+                if rec.error_count >= max_errors:
+                    logger.error("Plugin '%s' exceeded error limit — disabling", rec.manifest.name)
+                    rec.plugin._enabled = False
+
+        self.engine.register_hook(hook_name, _hook, priority=priority)
 
     async def unload_plugin(self, name: str) -> bool:
         """Gracefully unload a plugin by name."""
@@ -307,31 +399,33 @@ class PluginManager:
             logger.error("Plugin '%s' on_unload() error: %s", name, exc)
         del self._plugins[name]
         self.engine.unregister_hook(f"plugin_{name}")
+
+        # Remove from sys.modules to allow clean re-load.
+        # The unique_name was built from the *file path* (parent dir + stem),
+        # not the manifest name — so derive it the same way.
+        path = Path(record.module_path)
+        unique_name = f"cerberus_plugin_{path.parent.name}_{path.stem}"
+        sys.modules.pop(unique_name, None)
+
         logger.info("Plugin unloaded: %s", name)
         return True
 
     # ── Engine integration ────────────────────────────────────────────────────
 
     def register_with_engine(self) -> None:
-        """Register all loaded plugins as engine tick hooks."""
+        """Register all loaded plugins as engine tick hooks.
+        
+        Safe to call multiple times — register_hook on an already-registered
+        name is a no-op because load_plugin_class() now calls
+        _register_hook_for_record() at load time. This method remains for
+        explicit bulk registration at startup.
+        """
         for name, record in self._plugins.items():
             hook_name = f"plugin_{name}"
-
-            async def _hook(tick: int, rec: PluginRecord = record) -> None:
-                if not rec.plugin._enabled:
-                    return
-                try:
-                    await rec.plugin.on_tick(tick)
-                except Exception as exc:
-                    rec.error_count += 1
-                    rec.plugin._error_count += 1
-                    logger.error("Plugin '%s' tick error (%d/%d): %s",
-                                 rec.manifest.name, rec.error_count, self._max_errors, exc)
-                    if rec.error_count >= self._max_errors:
-                        logger.error("Plugin '%s' exceeded error limit — disabling", rec.manifest.name)
-                        rec.plugin._enabled = False
-
-            self.engine.register_hook(hook_name, _hook, priority=200)
+            # Skip if already registered (idempotent)
+            if any(h.name == hook_name for h in self.engine._plugin_hooks):
+                continue
+            self._register_hook_for_record(name, record)
 
     # ── Control ───────────────────────────────────────────────────────────────
 

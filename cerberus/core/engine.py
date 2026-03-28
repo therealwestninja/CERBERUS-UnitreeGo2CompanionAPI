@@ -201,6 +201,10 @@ class CerberusEngine:
                 logger.error("Engine tick %d error: %s", tick, exc, exc_info=True)
                 self._state = EngineState.ERROR
                 await self.bus.publish("engine.error", {"tick": tick, "error": str(exc)})
+                # Ensure clean teardown — without this call the watchdog task and
+                # bridge connection stay open after the loop exits, creating a
+                # resource leak that also prevents clean restart.
+                asyncio.ensure_future(self.stop())
                 break
 
             t1 = time.monotonic()

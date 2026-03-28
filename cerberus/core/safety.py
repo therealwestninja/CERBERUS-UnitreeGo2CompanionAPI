@@ -134,13 +134,17 @@ class SafetyWatchdog:
 
     async def clear_estop(self) -> bool:
         """Re-arm after E-stop — only allowed in simulation."""
-        sim = os.getenv("GO2_SIMULATION", "false").lower() in ("true", "1")
+        sim = os.getenv("GO2_SIMULATION", "false").lower() in ("true", "1", "yes")
         if not sim:
             logger.error("E-Stop clearance only allowed in simulation mode")
             return False
         self._estop = False
         self._level = SafetyLevel.NOMINAL
         self._last_heartbeat = time.monotonic()
+        # Also clear the flag in the bridge's cached state so GET /state reflects it
+        bridge_state = getattr(self.bridge, "_state", None)
+        if bridge_state is not None:
+            bridge_state.estop_active = False
         await self._emit_event(SafetyLevel.NOMINAL, "ESTOP_CLEARED", "operator reset (sim)")
         return True
 
@@ -207,18 +211,26 @@ class SafetyWatchdog:
             )
             return
 
-        # 3. Battery level
+        # 3. Battery level — ordered from most to least severe so each
+        #    threshold is reachable regardless of the current _level.
+        #    (Bug: previous version required _level==NOMINAL for CAUTION/WARNING,
+        #    making them unreachable once WARNING was already set.)
         pct = state.battery_percent
         if pct <= self.limits.battery_critical_pct:
             await self.trigger_estop(f"Battery critical: {pct:.1f}%")
-        elif pct <= self.limits.battery_low_pct and self._level == SafetyLevel.NOMINAL:
-            await self._emit_event(SafetyLevel.WARNING, "BATTERY_LOW", f"{pct:.1f}%")
-            self._level = SafetyLevel.WARNING
-        elif pct <= self.limits.battery_warn_pct and self._level == SafetyLevel.NOMINAL:
-            await self._emit_event(SafetyLevel.CAUTION, "BATTERY_WARN", f"{pct:.1f}%")
-            self._level = SafetyLevel.CAUTION
-        elif pct > self.limits.battery_warn_pct and self._level in (SafetyLevel.CAUTION, SafetyLevel.WARNING):
-            self._level = SafetyLevel.NOMINAL
+        elif pct <= self.limits.battery_low_pct:
+            if self._level not in (SafetyLevel.WARNING, SafetyLevel.CRITICAL, SafetyLevel.ESTOP):
+                await self._emit_event(SafetyLevel.WARNING, "BATTERY_LOW", f"{pct:.1f}%")
+                self._level = SafetyLevel.WARNING
+        elif pct <= self.limits.battery_warn_pct:
+            if self._level == SafetyLevel.NOMINAL:
+                await self._emit_event(SafetyLevel.CAUTION, "BATTERY_WARN", f"{pct:.1f}%")
+                self._level = SafetyLevel.CAUTION
+        elif pct > self.limits.battery_warn_pct + 2.0:
+            # 2% hysteresis prevents oscillation at the threshold boundary
+            if self._level in (SafetyLevel.CAUTION, SafetyLevel.WARNING):
+                await self._emit_event(SafetyLevel.NOMINAL, "BATTERY_RECOVERED", f"{pct:.1f}%")
+                self._level = SafetyLevel.NOMINAL
 
     # ── Audit logging ──────────────────────────────────────────────────────────
 

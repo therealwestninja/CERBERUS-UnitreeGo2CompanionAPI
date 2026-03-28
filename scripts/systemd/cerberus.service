@@ -1,0 +1,74 @@
+# /etc/systemd/system/cerberus.service
+# ═══════════════════════════════════════════════════════════════════════════
+# CERBERUS Go2 Companion System — systemd service
+#
+# Install:
+#   sudo cp scripts/systemd/cerberus.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable cerberus
+#   sudo systemctl start cerberus
+#
+# Monitor:
+#   sudo systemctl status cerberus
+#   journalctl -u cerberus -f
+#
+# Update .env path below if your deployment differs from /opt/cerberus/.env
+# ═══════════════════════════════════════════════════════════════════════════
+
+[Unit]
+Description=CERBERUS — Unitree Go2 Canine Companion Platform
+Documentation=https://github.com/therealwestninja/CERBERUS-UnitreeGo2CompanionAPI
+After=network-online.target
+Wants=network-online.target
+
+# Wait for the Go2's Ethernet interface to appear
+# Replace enp2s0 with your actual interface name
+After=sys-subsystem-net-devices-enp2s0.device
+Wants=sys-subsystem-net-devices-enp2s0.device
+
+[Service]
+Type=simple
+
+# Run as a dedicated user for security
+# Create: sudo useradd -r -s /bin/false cerberus
+User=cerberus
+Group=cerberus
+
+WorkingDirectory=/opt/cerberus
+
+# Load environment from .env — never commit the real .env to version control
+EnvironmentFile=-/opt/cerberus/.env
+
+# Main process
+ExecStart=/opt/cerberus/venv/bin/cerberus
+
+# Graceful shutdown — CERBERUS saves personality on SIGTERM
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Log to journal
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cerberus
+
+# Restart policy — restart on failure with back-off
+Restart=on-failure
+RestartSec=5
+StartLimitInterval=120
+StartLimitBurst=5
+
+# Resource limits
+# Uncomment and tune these for your hardware:
+# CPUQuota=80%
+# MemoryMax=2G
+# LimitNOFILE=65536
+
+# Prevent privilege escalation
+NoNewPrivileges=true
+
+# Network access — needed for DDS
+# Remove if running fully offline
+IPAddressAllow=localhost 192.168.123.0/24
+
+[Install]
+WantedBy=multi-user.target

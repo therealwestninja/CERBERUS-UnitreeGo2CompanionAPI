@@ -257,6 +257,9 @@ class DigitalAnatomy:
 
     Attach to engine:
         engine.anatomy = DigitalAnatomy()
+
+    Attach a payload to adjust COM and stability accounting:
+        anatomy.attach_payload(PayloadConfig(...))
     """
 
     def __init__(self):
@@ -273,6 +276,26 @@ class DigitalAnatomy:
         self.com        = (0.0, 0.0, 0.27)
         self.stability  = 0.0
         self.polygon: list = []
+
+        # Payload integration
+        self._payload_compensator = None   # type: ignore[assignment]
+
+    def attach_payload(self, config) -> None:
+        """
+        Register a payload with the anatomy model so that COM and stability
+        computations account for the additional mass.
+        """
+        from cerberus.anatomy.payload import PayloadCompensator
+        self._payload_compensator = PayloadCompensator(config)
+        logger.info(
+            "DigitalAnatomy: payload attached — mass=%.2fkg thick=%.0fmm",
+            config.mass_kg, config.thickness_m * 1000
+        )
+
+    def detach_payload(self) -> None:
+        """Remove payload from anatomy model."""
+        self._payload_compensator = None
+        logger.info("DigitalAnatomy: payload detached")
 
     async def update(self, state: "RobotState") -> None:
         now = time.monotonic()
@@ -304,20 +327,33 @@ class DigitalAnatomy:
             foot.force = state.foot_force[leg_idx] if leg_idx < len(state.foot_force) else 0.0
             foot.contact = foot.force > 5.0  # 5N threshold
 
-        # COM and stability
-        self.com      = compute_com(self.feet)
+        # COM and stability — incorporate payload mass offset if present
+        if self._payload_compensator is not None:
+            combined = self._payload_compensator.combined_com(state.body_height)
+            self.com = (combined.x, combined.y, combined.z)
+        else:
+            self.com = compute_com(self.feet)
+
         self.polygon  = support_polygon(self.feet)
         self.stability = stability_margin(self.com, self.polygon)
 
-        # Energy
+        # Energy — add payload holding cost if present
         self.energy.update(self.joints, dt)
+        if self._payload_compensator is not None:
+            # Extra idle power to maintain height against additional weight
+            extra_w = self._payload_compensator.config.mass_kg * 9.81 * 0.05
+            self.energy._idle_power_w = 30.0 + extra_w
 
     def status(self) -> dict:
-        return {
+        result = {
             "joints": [j.to_dict() for j in self.joints],
             "feet": [f.to_dict() for f in self.feet],
             "com": {"x": round(self.com[0], 3), "y": round(self.com[1], 3), "z": round(self.com[2], 3)},
             "stability_margin_m": round(self.stability, 4),
             "energy": self.energy.to_dict(),
             "max_fatigue": round(max(j.fatigue for j in self.joints), 3),
+            "payload_attached": self._payload_compensator is not None,
         }
+        if self._payload_compensator is not None:
+            result["payload"] = self._payload_compensator.to_dict()
+        return result

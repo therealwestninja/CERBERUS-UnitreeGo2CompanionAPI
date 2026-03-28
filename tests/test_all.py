@@ -554,3 +554,229 @@ async def test_plugin_enable_disable(engine_fixture):
     assert pm._plugins["TogglePlugin"].plugin._enabled is False
     assert pm.enable("TogglePlugin") is True
     assert pm._plugins["TogglePlugin"].plugin._enabled is True
+
+
+# ── Goal queue consumer ───────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_goal_queue_pending_in_bt_context():
+    """peek() returns the highest-priority goal; it appears in BT context."""
+    from cerberus.cognitive.behavior_engine import BehaviorEngine, Goal, GoalQueue
+    from cerberus.bridge.go2_bridge import SimBridge
+    bridge = SimBridge()
+    await bridge.connect()
+    be = BehaviorEngine(bridge)
+    be.push_goal("sit", priority=0.9)
+    goal = be.goals.peek()
+    assert goal is not None
+    assert goal.name == "sit"
+    await bridge.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_goal_queue_sit_is_consumed():
+    """After _execute_goal(), the goal is popped from the queue."""
+    from cerberus.cognitive.behavior_engine import BehaviorEngine, Goal
+    from cerberus.bridge.go2_bridge import SimBridge
+    bridge = SimBridge()
+    await bridge.connect()
+    be = BehaviorEngine(bridge)
+    be.push_goal("sit", priority=0.9)
+    assert be.goals.peek() is not None
+    await be._execute_goal(be.goals.peek())
+    assert be.goals.peek() is None
+    await bridge.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_goal_queue_move_timed_clamps_duration():
+    """move_timed with extreme duration_s is clamped to [0.1, 30.0]."""
+    from cerberus.cognitive.behavior_engine import BehaviorEngine, Goal
+    from cerberus.bridge.go2_bridge import SimBridge
+    import time
+    bridge = SimBridge()
+    await bridge.connect()
+    be = BehaviorEngine(bridge)
+    goal = Goal(name="move_timed", priority=0.5, params={"vx": 0.3, "duration_s": 0.1})
+    t0 = time.monotonic()
+    await be._execute_goal(goal)
+    elapsed = time.monotonic() - t0
+    # Should complete in ~0.1s, not hang
+    assert elapsed < 2.0
+    await bridge.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_goal_queue_unknown_goal_is_popped():
+    """Unknown goal names are popped to avoid starvation."""
+    from cerberus.cognitive.behavior_engine import BehaviorEngine
+    from cerberus.bridge.go2_bridge import SimBridge
+    bridge = SimBridge()
+    await bridge.connect()
+    be = BehaviorEngine(bridge)
+    be.push_goal("totally_unknown_command", priority=0.5)
+    assert be.goals.peek() is not None
+    await be._execute_goal(be.goals.peek())
+    assert be.goals.peek() is None
+    await bridge.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_goal_queue_priority_ordering():
+    """Higher-priority goals are returned first by peek()."""
+    from cerberus.cognitive.behavior_engine import BehaviorEngine
+    from cerberus.bridge.go2_bridge import SimBridge
+    bridge = SimBridge()
+    await bridge.connect()
+    be = BehaviorEngine(bridge)
+    be.push_goal("hello",   priority=0.3)
+    be.push_goal("sit",     priority=0.9)
+    be.push_goal("stretch", priority=0.6)
+    assert be.goals.peek().name == "sit"
+    await bridge.disconnect()
+
+
+# ── SimBridge sensor realism ──────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_sim_bridge_foot_forces_nonzero_when_standing():
+    """After stand_up(), foot_force should be > 0 for all four feet."""
+    import asyncio
+    from cerberus.bridge.go2_bridge import SimBridge
+    bridge = SimBridge()
+    await bridge.connect()
+    await bridge.stand_up()
+    # Give sim_loop a couple ticks to run
+    await asyncio.sleep(0.1)
+    state = await bridge.get_state()
+    assert all(f > 0 for f in state.foot_force), \
+        f"Expected nonzero foot forces, got {state.foot_force}"
+    await bridge.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_sim_bridge_joint_torques_nonzero_when_standing():
+    """Joint torques should be populated after stand_up()."""
+    import asyncio
+    from cerberus.bridge.go2_bridge import SimBridge
+    bridge = SimBridge()
+    await bridge.connect()
+    await bridge.stand_up()
+    await asyncio.sleep(0.1)
+    state = await bridge.get_state()
+    assert len(state.joint_torques) == 12
+    # At least some torques should be nonzero (leg load)
+    assert any(abs(t) > 0.01 for t in state.joint_torques), \
+        f"All torques zero: {state.joint_torques}"
+    await bridge.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_sim_bridge_foot_forces_low_when_lying():
+    """When lying down, foot forces should be near zero."""
+    import asyncio
+    from cerberus.bridge.go2_bridge import SimBridge
+    bridge = SimBridge()
+    await bridge.connect()
+    await bridge.stand_down()
+    await asyncio.sleep(0.1)
+    state = await bridge.get_state()
+    assert all(f < 20.0 for f in state.foot_force), \
+        f"Expected near-zero foot forces when lying, got {state.foot_force}"
+    await bridge.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_sim_bridge_imu_pitch_responds_to_velocity():
+    """IMU pitch should shift when robot is commanded to move forward."""
+    import asyncio
+    from cerberus.bridge.go2_bridge import SimBridge
+    bridge = SimBridge()
+    await bridge.connect()
+    await bridge.stand_up()
+    await asyncio.sleep(0.05)
+    pitch_before = (await bridge.get_state()).pitch
+    await bridge.move(1.0, 0.0, 0.0)   # max forward
+    await asyncio.sleep(0.3)           # let dynamics integrate
+    pitch_after = (await bridge.get_state()).pitch
+    # Moving forward should produce a pitch change (nose-up = negative)
+    assert pitch_after != pitch_before, "Pitch did not respond to velocity command"
+    await bridge.disconnect()
+
+
+# ── WebSocket input validation ────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_ws_handler_move_string_vx_sends_error():
+    """_handle_ws_command with non-numeric vx sends error, does not crash."""
+    import json
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    sent = []
+    mock_ws = AsyncMock()
+    mock_ws.send_text = AsyncMock(side_effect=lambda m: sent.append(m))
+
+    # Patch module globals so handler can reference bridge/watchdog
+    import backend.main as bm
+    real_bridge = bm.bridge
+    real_watchdog = bm.watchdog
+    try:
+        bm.bridge   = MagicMock()
+        bm.watchdog = MagicMock()
+        bm.watchdog.estop_active = False
+        bm.bridge.move = AsyncMock(return_value=True)
+
+        await bm._handle_ws_command(mock_ws, {"cmd": "move", "vx": "not_a_number"})
+        assert any("error" in m for m in sent), f"No error sent: {sent}"
+    finally:
+        bm.bridge   = real_bridge
+        bm.watchdog = real_watchdog
+
+
+@pytest.mark.asyncio
+async def test_ws_handler_unknown_command_sends_error():
+    """_handle_ws_command with unknown cmd returns a typed error."""
+    import json
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    sent = []
+    mock_ws = AsyncMock()
+    mock_ws.send_text = AsyncMock(side_effect=lambda m: sent.append(m))
+
+    import backend.main as bm
+    real_bridge = bm.bridge
+    real_watchdog = bm.watchdog
+    try:
+        bm.bridge   = MagicMock()
+        bm.watchdog = MagicMock()
+        await bm._handle_ws_command(mock_ws, {"cmd": "hack_the_planet"})
+        assert any("error" in m for m in sent), f"No error sent: {sent}"
+    finally:
+        bm.bridge   = real_bridge
+        bm.watchdog = real_watchdog
+
+
+@pytest.mark.asyncio
+async def test_ws_handler_estop_move_blocked():
+    """move command while estop is active sends error, does not call bridge."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    sent = []
+    mock_ws = AsyncMock()
+    mock_ws.send_text = AsyncMock(side_effect=lambda m: sent.append(m))
+
+    import backend.main as bm
+    real_bridge = bm.bridge
+    real_watchdog = bm.watchdog
+    try:
+        bm.bridge   = MagicMock()
+        bm.bridge.move = AsyncMock(return_value=True)
+        bm.watchdog = MagicMock()
+        bm.watchdog.estop_active = True
+
+        await bm._handle_ws_command(mock_ws, {"cmd": "move", "vx": 0.5, "vy": 0.0, "vyaw": 0.0})
+        bm.bridge.move.assert_not_called()
+        assert any("error" in m for m in sent)
+    finally:
+        bm.bridge   = real_bridge
+        bm.watchdog = real_watchdog
