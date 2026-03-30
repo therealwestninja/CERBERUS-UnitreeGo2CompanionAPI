@@ -11,10 +11,9 @@ CERBERUS is a **fully autonomous, adaptive, and intelligent quadrupedal robotics
 > **Simulation mode** — no robot required. Use the "LocalHost.html" web-based interface simulator. Ideal for product demonstrtions, script and plugin development and testing.
 > **Real-time control** — Unitree GO2 robot required. Use the "PythonServer.html" web-based interface controller to guide the robot, issue commands, and drive the robot autonomously . 
 
-**Backend (You are here →):** https://github.com/therealwestninja/CERBERUS-UnitreeGo2CompanionAPI  
+**Backend (You are here →)* https://github.com/therealwestninja/CERBERUS-UnitreeGo2CompanionAPI  
 **Interface:** https://github.com/therealwestninja/CERBERUS-UnitreeGo2Companion_Web-Interface  
-**Plugins:** https://github.com/therealwestninja/CERBERUS-UnitreeGo2Companion_Web-Interface
-**License:** MIT  
+**Plugins:** https://github.com/therealwestninja/Sweetie-Bot-Plugins_for_CERBERUS-API
 
 ---
 
