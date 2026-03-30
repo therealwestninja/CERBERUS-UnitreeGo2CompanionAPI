@@ -8,7 +8,13 @@
 
 CERBERUS is a **fully autonomous, adaptive, and intelligent quadrupedal robotics platform** for the **Unitree Go2**. It combines a **three-layer cognitive engine**, **digital anatomy model**, **safety watchdog**, **session-persistent personality**, and a **sandboxed plugin ecosystem** into a single, research-grade system.
 
-> **Simulation mode** — no robot required. Set `GO2_SIMULATION=true` and everything runs.
+> **Simulation mode** — no robot required. Use the "LocalHost.html" web-based interface simulator. Ideal for product demonstrtions, script and plugin development and testing.
+> **Real-time control** — Unitree GO2 robot required. Use the "PythonServer.html" web-based interface controller to guide the robot, issue commands, and drive the robot autonomously . 
+
+**Backend (You are here →):** https://github.com/therealwestninja/CERBERUS-UnitreeGo2CompanionAPI  
+**Interface:** https://github.com/therealwestninja/CERBERUS-UnitreeGo2Companion_Web-Interface  
+**Plugins:** https://github.com/therealwestninja/CERBERUS-UnitreeGo2Companion_Web-Interface
+**License:** MIT  
 
 ---
 
