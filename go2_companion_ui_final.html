@@ -1,0 +1,1771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Go2 Companion</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cream:#faf8f4;--warm:#ffffff;--sand:#f2ede4;--tan:#e8dfd0;--muted:#c8bfb0;
+  --ink:#2d2620;--ink2:#6b5f54;--ink3:#9e9088;
+  --amber:#e8913a;--ambL:#fdf2e8;--ambD:#c4742a;
+  --leaf:#4caf7d;--leafL:#e8f7ef;
+  --sky:#4a9fd4;--skyL:#e8f4fc;
+  --rose:#e05a5a;--roseL:#fdeaea;
+  --lav:#9b7fe8;--lavL:#f0ecfd;
+  --peach:#f09060;--peachL:#fdf0e8;
+  --xs:0 1px 3px rgba(45,38,32,.08);--sm:0 2px 8px rgba(45,38,32,.10);
+  --md:0 4px 20px rgba(45,38,32,.12);--lg:0 8px 40px rgba(45,38,32,.16);
+  --r:12px;--r2:8px;--r3:20px;--r4:28px;--pill:100px;
+  --serif:'Fraunces',Georgia,serif;--sans:'DM Sans',system-ui,sans-serif;
+  --mono:'DM Mono',monospace
+}
+html,body{height:100%;background:var(--sand);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;overflow:hidden}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--muted);border-radius:4px}
+button{cursor:pointer;font-family:var(--sans)}
+
+/* ── Layout ── */
+.shell{display:grid;grid-template-rows:60px 1fr;height:100vh}
+.header{background:var(--warm);border-bottom:1px solid var(--tan);display:flex;align-items:center;padding:0 18px;gap:12px;box-shadow:var(--xs);z-index:10}
+.body{display:grid;grid-template-columns:68px 1fr 280px;overflow:hidden}
+.main{overflow-y:auto;display:flex;flex-direction:column;background:var(--cream)}
+.page{display:none;flex:1;padding:20px;gap:16px;flex-direction:column}
+.page.active{display:flex}
+
+/* ── Header ── */
+.brand{display:flex;align-items:center;gap:9px}
+.brand-ico{width:34px;height:34px;background:var(--amber);border-radius:var(--r2);display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 2px 6px rgba(232,145,58,.35)}
+.brand-name{font-family:var(--serif);font-size:19px;font-weight:600;color:var(--ink)}
+.brand-name span{color:var(--amber)}
+.hstat{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink2)}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--muted);transition:background .3s}
+.dot.ok{background:var(--leaf);box-shadow:0 0 0 3px rgba(76,175,125,.2)}
+.dot.warn{background:var(--amber)}
+.dot.err{background:var(--rose)}
+.mode-badge{background:var(--skyL);color:var(--sky);border:1px solid rgba(74,159,212,.25);border-radius:var(--pill);padding:3px 10px;font-size:11px;font-weight:600}
+.mode-badge.hw{background:var(--leafL);color:var(--leaf)}
+.hspace{flex:1}
+.bat-chip{display:flex;align-items:center;gap:6px;background:var(--cream);border:1px solid var(--tan);border-radius:var(--pill);padding:4px 11px;font-size:12px;font-weight:500;color:var(--ink2)}
+.bat-bar{width:26px;height:9px;background:var(--tan);border-radius:3px;overflow:hidden;position:relative}
+.bat-fill{position:absolute;top:0;left:0;height:100%;border-radius:3px;transition:width .6s,background .3s;background:var(--leaf)}
+.arm-btn{display:flex;align-items:center;gap:7px;background:var(--cream);border:1.5px solid var(--tan);border-radius:var(--pill);padding:6px 13px;font-size:13px;font-weight:500;color:var(--ink2);transition:all .15s}
+.arm-btn:hover{border-color:var(--amber);color:var(--ambD)}
+.arm-btn.armed{background:var(--ambL);border-color:var(--amber);color:var(--ambD)}
+.estop-btn{display:flex;align-items:center;gap:6px;background:var(--rose);color:#fff;border:none;border-radius:var(--r2);padding:8px 15px;font-size:13px;font-weight:700;transition:all .15s;box-shadow:0 2px 8px rgba(224,90,90,.35)}
+.estop-btn:hover{background:#cb4545;transform:translateY(-1px)}
+.estop-btn.fired{background:#8b0000;animation:epulse .6s step-end infinite}
+@keyframes epulse{50%{background:var(--rose)}}
+
+/* ── Sidenav ── */
+.sidenav{background:var(--warm);border-right:1px solid var(--tan);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:3px}
+.nav{display:flex;flex-direction:column;align-items:center;gap:3px;width:54px;padding:9px 0;border-radius:var(--r);border:1.5px solid transparent;transition:all .15s;text-decoration:none}
+.nav:hover{background:var(--cream)}
+.nav.active{background:var(--ambL);border-color:rgba(232,145,58,.25)}
+.nav-ico{font-size:20px;line-height:1}
+.nav-lbl{font-size:9px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.04em}
+.nav.active .nav-lbl{color:var(--ambD)}
+.nav-div{width:30px;height:1px;background:var(--tan);margin:5px 0}
+.nav-sp{flex:1}
+
+/* ── Right panel ── */
+.rpanel{background:var(--warm);border-left:1px solid var(--tan);display:flex;flex-direction:column;overflow:hidden}
+.rptabs{display:flex;border-bottom:1px solid var(--tan);padding:0 10px;overflow-x:auto;flex-shrink:0}
+.rptab{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:10px 8px;color:var(--ink3);cursor:pointer;border-bottom:2px solid transparent;transition:all .12s;white-space:nowrap;flex-shrink:0}
+.rptab:hover{color:var(--ink2)}
+.rptab.active{color:var(--ambD);border-bottom-color:var(--amber)}
+.rpcontent{flex:1;overflow-y:auto;padding:12px}
+.rpsec{display:none}.rpsec.active{display:block}
+
+/* ── Cards ── */
+.card{background:var(--warm);border-radius:var(--r3);border:1px solid var(--tan);padding:18px;box-shadow:var(--xs)}
+.ctitle{font-weight:600;font-size:12px;color:var(--ink2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:13px;display:flex;align-items:center;gap:6px}
+.ctitle .ci{font-size:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+
+/* ── Telemetry cells ── */
+.tcell{background:var(--cream);border-radius:var(--r2);padding:9px 11px;border:1px solid var(--tan)}
+.tlbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink3)}
+.tval{font-family:var(--mono);font-size:15px;font-weight:500;margin-top:3px;color:var(--ink);transition:color .3s}
+.tval.ok{color:var(--leaf)}.tval.warn{color:var(--amber)}.tval.err{color:var(--rose)}
+
+/* ── State badge ── */
+.sbadge{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:var(--r2);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.sbadge.idle{background:var(--cream);color:var(--ink2);border:1.5px solid var(--tan)}
+.sbadge.active{background:var(--ambL);color:var(--ambD);border:1.5px solid rgba(232,145,58,.3)}
+.sbadge.fault{background:var(--roseL);color:var(--rose);border:1.5px solid rgba(224,90,90,.25)}
+.sbadge.estop{background:var(--rose);color:#fff;border:1.5px solid var(--rose)}
+
+/* ── Robot wireframe canvas ── */
+.robo-viz{position:relative;background:linear-gradient(145deg,var(--cream),var(--sand));border-radius:var(--r3);overflow:hidden;border:1px solid var(--tan)}
+#rcanv{display:block;width:100%;height:220px}
+.vizchips{position:absolute;top:10px;left:10px;display:flex;flex-direction:column;gap:4px}
+.vchip{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.88);backdrop-filter:blur(4px);border-radius:var(--pill);padding:3px 9px;font-size:11px;font-weight:500;color:var(--ink2);border:1px solid var(--tan);box-shadow:var(--xs)}
+.vchip .vd{width:6px;height:6px;border-radius:50%}
+
+/* ── Quick actions ── */
+.qa-btn{display:flex;align-items:center;gap:9px;background:var(--warm);border:1.5px solid var(--tan);border-radius:var(--r3);padding:12px 14px;transition:all .15s;font-family:var(--sans)}
+.qa-btn:hover{border-color:var(--amber);background:var(--ambL)}
+.qa-ico{font-size:19px;flex-shrink:0}.qa-txt{font-size:13px;font-weight:500;color:var(--ink)}
+
+/* ── Behavior grid ── */
+.beh-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:9px}
+.beh-btn{background:var(--warm);border:1.5px solid var(--tan);border-radius:var(--r3);padding:14px 9px;text-align:center;transition:all .18s;user-select:none}
+.beh-btn:hover{border-color:var(--amber);transform:translateY(-2px);box-shadow:var(--sm)}
+.beh-btn:active{transform:translateY(0)}
+.beh-btn.running{background:var(--ambL);border-color:var(--amber);animation:bpulse 2s ease-in-out infinite}
+@keyframes bpulse{0%,100%{box-shadow:0 0 0 0 rgba(232,145,58,.3)}50%{box-shadow:0 0 0 5px rgba(232,145,58,0)}}
+.beh-ico{font-size:26px;line-height:1;margin-bottom:6px}
+.beh-name{font-size:11px;font-weight:500;color:var(--ink2)}
+.beh-cat{font-size:10px;color:var(--ink3);margin-top:1px}
+.cat-pills{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:13px}
+.cpill{padding:4px 11px;border-radius:var(--pill);font-size:12px;font-weight:500;background:var(--cream);border:1.5px solid var(--tan);color:var(--ink2);cursor:pointer;transition:all .12s}
+.cpill:hover{border-color:var(--amber)}.cpill.active{background:var(--ambL);border-color:var(--amber);color:var(--ambD)}
+
+/* ── Joystick ── */
+.js-wrap{display:flex;justify-content:center;padding:16px}
+.js-base{width:150px;height:150px;border-radius:50%;background:var(--cream);border:2px solid var(--tan);position:relative;cursor:crosshair;box-shadow:var(--sm)}
+.js-ring{width:80px;height:80px;border-radius:50%;border:1.5px dashed var(--tan);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+.js-knob{width:52px;height:52px;border-radius:50%;background:var(--warm);border:2px solid var(--muted);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);transition:background .15s;box-shadow:var(--sm);display:flex;align-items:center;justify-content:center;font-size:20px;pointer-events:none}
+.js-knob.active{background:var(--ambL);border-color:var(--amber)}
+.js-vals{text-align:center;font-family:var(--mono);font-size:11px;color:var(--ink3)}
+
+/* ── Sliders / inputs ── */
+input[type=range]{-webkit-appearance:none;width:100%;height:4px;background:var(--tan);border-radius:2px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--amber);box-shadow:var(--xs)}
+.thresh-row{margin-bottom:13px}
+.thresh-hdr{display:flex;justify-content:space-between;margin-bottom:5px}
+.thresh-name{font-size:12px;font-weight:500;color:var(--ink2)}
+.thresh-val{font-family:var(--mono);font-size:12px;color:var(--ambD)}
+input[type=text],input[type=number],input[type=password],textarea,select{background:var(--cream);border:1.5px solid var(--tan);border-radius:var(--r2);padding:7px 11px;font-family:var(--sans);font-size:13px;color:var(--ink);outline:none;transition:border-color .15s;width:100%}
+input:focus,textarea:focus,select:focus{border-color:var(--amber)}
+select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath fill='%239e9088' d='M5 6L0 0h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;background-size:8px;padding-right:28px;cursor:pointer}
+label.lbl{font-size:11px;color:var(--ink3);display:block;margin-bottom:4px}
+
+/* ── Toggle ── */
+.toggle{position:relative;width:42px;height:22px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.ttrack{position:absolute;inset:0;background:var(--muted);border-radius:var(--pill);cursor:pointer;transition:background .2s}
+.ttrack::after{content:'';position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:var(--xs)}
+.toggle input:checked+.ttrack{background:var(--amber)}
+.toggle input:checked+.ttrack::after{transform:translateX(20px)}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--pill);font-family:var(--sans);font-size:13px;font-weight:600;border:none;transition:all .15s}
+.btn-p{background:var(--amber);color:#fff;box-shadow:0 2px 8px rgba(232,145,58,.35)}
+.btn-p:hover{background:var(--ambD);transform:translateY(-1px)}
+.btn-o{background:transparent;color:var(--ambD);border:1.5px solid var(--amber)}
+.btn-o:hover{background:var(--ambL)}
+.btn-d{background:var(--roseL);color:var(--rose);border:1.5px solid rgba(224,90,90,.25)}
+.btn-d:hover{background:var(--rose);color:#fff}
+.btn-ghost{background:transparent;color:var(--ink2);border:1.5px solid var(--tan)}
+.btn-ghost:hover{border-color:var(--amber)}
+
+/* ── Policy grid ── */
+.pol-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pol-opt{background:var(--cream);border:1.5px solid var(--tan);border-radius:var(--r3);padding:13px;cursor:pointer;transition:all .15s;text-align:center}
+.pol-opt:hover{border-color:var(--amber)}.pol-opt.active{background:var(--ambL);border-color:var(--amber)}
+.pol-ico{font-size:22px;margin-bottom:5px}.pol-name{font-weight:600;font-size:13px;color:var(--ink)}
+.pol-desc{font-size:11px;color:var(--ink3);margin-top:2px}
+
+/* ── Objects ── */
+.obj-card{background:var(--warm);border:1.5px solid var(--tan);border-radius:var(--r3);padding:13px 14px;cursor:pointer;transition:all .15s;position:relative}
+.obj-card:hover{border-color:var(--amber);transform:translateY(-1px);box-shadow:var(--sm)}
+.obj-card.sel{border-color:var(--amber);background:var(--ambL)}
+.obj-name{font-weight:600;font-size:13px;color:var(--ink);margin-bottom:3px}
+.obj-type{font-size:11px;color:var(--ink3);margin-bottom:7px}
+.obj-tags{display:flex;gap:4px;flex-wrap:wrap}
+.tag{font-size:10px;padding:2px 7px;border-radius:var(--pill);font-weight:500}
+.tag.a{background:var(--skyL);color:var(--sky)}.tag.m{background:var(--lavL);color:var(--lav)}.tag.t{background:var(--peachL);color:var(--peach)}
+.obj-fn{position:absolute;top:13px;right:13px;font-family:var(--mono);font-size:10px;color:var(--ink3)}
+
+/* ── Mission cards ── */
+.mission-card{background:var(--warm);border:1.5px solid var(--tan);border-radius:var(--r3);padding:14px;display:flex;align-items:center;gap:13px}
+.mi{width:42px;height:42px;border-radius:var(--r2);display:flex;align-items:center;justify-content:center;font-size:21px;flex-shrink:0}
+.mi.patrol{background:var(--skyL)}.mi.follow{background:var(--leafL)}.mi.inspect{background:var(--lavL)}.mi.sequence{background:var(--ambL)}
+.mb{flex:1}.mn{font-weight:600;font-size:13px;color:var(--ink)}.ms{font-size:11px;color:var(--ink3);margin-top:2px}
+.mpbar{height:4px;background:var(--tan);border-radius:2px;margin-top:7px;overflow:hidden}
+.mpfill{height:100%;background:var(--leaf);border-radius:2px;transition:width .5s}
+
+/* ── Animation studio ── */
+.anim-player{background:var(--cream);border-radius:var(--r3);border:1px solid var(--tan);overflow:hidden}
+.anim-viz{height:120px;position:relative}
+#acanv{display:block;width:100%;height:100%}
+.anim-controls{padding:12px;display:flex;align-items:center;gap:10px;border-top:1px solid var(--tan)}
+.a-time{font-family:var(--mono);font-size:11px;color:var(--ink2);flex:1;text-align:center}
+.anim-timeline{width:100%;height:6px;background:var(--tan);border-radius:3px;cursor:pointer;position:relative;overflow:hidden}
+.anim-head{position:absolute;top:0;left:0;height:100%;background:var(--amber);border-radius:3px;transition:width .1s linear}
+.fmt-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fmt-btn{background:var(--cream);border:1.5px solid var(--tan);border-radius:var(--r2);padding:9px;text-align:center;cursor:pointer;transition:all .12s;font-size:11px;font-weight:500;color:var(--ink2)}
+.fmt-btn:hover{border-color:var(--amber);background:var(--ambL)}
+.fmt-btn .fmt-ico{font-size:18px;margin-bottom:4px}
+
+/* ── BT visualizer ── */
+.bt-viz{background:var(--cream);border-radius:var(--r3);border:1px solid var(--tan);overflow:hidden}
+#btcanv{display:block;width:100%;height:260px}
+.bt-legend{display:flex;gap:10px;padding:10px 14px;border-top:1px solid var(--tan);flex-wrap:wrap}
+.bt-l{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink2)}
+.bt-l .bls{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+
+/* ── Metrics dashboard ── */
+.metrics-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.mcard{background:var(--warm);border:1px solid var(--tan);border-radius:var(--r2);padding:11px;text-align:center}
+.mval{font-family:var(--mono);font-size:20px;font-weight:600;color:var(--ink)}
+.mlbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);margin-top:3px}
+.mval.ok{color:var(--leaf)}.mval.warn{color:var(--amber)}.mval.err{color:var(--rose)}
+.prom-box{background:var(--cream);border-radius:var(--r2);border:1px solid var(--tan);padding:10px;font-family:var(--mono);font-size:10px;color:var(--ink2);max-height:150px;overflow-y:auto;white-space:pre}
+
+/* ── Settings ── */
+.srow{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--cream)}
+.slabel{font-size:13px;font-weight:500;color:var(--ink)}.sdesc{font-size:11px;color:var(--ink3);margin-top:1px}
+
+/* ── Language picker ── */
+.lang-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.lang-opt{background:var(--cream);border:1.5px solid var(--tan);border-radius:var(--r2);padding:10px 12px;cursor:pointer;transition:all .12s;display:flex;align-items:center;gap:8px}
+.lang-opt:hover{border-color:var(--amber)}.lang-opt.active{background:var(--ambL);border-color:var(--amber)}
+.lang-flag{font-size:18px}.lang-name{font-size:12px;font-weight:500;color:var(--ink)}
+.lang-code{font-size:10px;font-family:var(--mono);color:var(--ink3)}
+
+/* ── Log ── */
+.log-entry{display:flex;gap:7px;padding:4px 0;border-bottom:1px solid var(--cream);align-items:flex-start}
+.log-ts{font-family:var(--mono);font-size:10px;color:var(--ink3);flex-shrink:0;padding-top:1px}
+.log-lvl{font-size:9px;font-weight:700;width:34px;flex-shrink:0;text-align:center;border-radius:3px;padding:1px 0}
+.log-lvl.info{background:var(--skyL);color:var(--sky)}.log-lvl.ok{background:var(--leafL);color:var(--leaf)}
+.log-lvl.warn{background:var(--ambL);color:var(--ambD)}.log-lvl.err{background:var(--roseL);color:var(--rose)}
+.log-msg{font-size:11px;color:var(--ink2);flex:1;line-height:1.4}
+
+/* ── Nodes ── */
+.node-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--cream)}
+.node-name{font-family:var(--mono);font-size:11px;color:var(--ink2)}
+.nst{font-size:9px;font-weight:700;padding:2px 7px;border-radius:var(--pill)}
+.nst.ok{background:var(--leafL);color:var(--leaf)}.nst.warn{background:var(--ambL);color:var(--ambD)}
+.nst.err{background:var(--roseL);color:var(--rose)}.nst.off{background:var(--cream);color:var(--ink3)}
+
+/* ── AI Section ── */
+.ai-sec{background:var(--cream);border-radius:var(--r3);border:1.5px solid var(--tan);padding:14px}
+.ai-out{background:var(--warm);border:1px solid var(--tan);border-radius:var(--r2);padding:9px;font-family:var(--mono);font-size:10px;color:var(--ink2);min-height:50px;max-height:90px;overflow-y:auto;white-space:pre-wrap;margin-top:9px}
+
+/* ── Minimal overlay ── */
+.minover{display:none;position:fixed;inset:0;background:var(--sand);z-index:200;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+.minover.open{display:flex}
+.min-estop{font-size:60px;cursor:pointer;filter:drop-shadow(0 4px 12px rgba(224,90,90,.4))}
+.min-state{font-family:var(--serif);font-size:26px;font-weight:600;color:var(--ink)}
+
+/* ── Banner ── */
+.banner{padding:7px 18px;font-size:12px;display:flex;align-items:center;gap:7px;flex-shrink:0}
+.banner.sim{background:var(--ambL);color:var(--ambD);border-bottom:1px solid rgba(232,145,58,.2)}
+.banner.hidden{display:none}
+
+/* ── Misc ── */
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeIn .22s ease}
+.page-title{font-family:var(--serif);font-size:22px;font-weight:600;color:var(--ink)}
+.page-sub{font-size:13px;color:var(--ink3);margin-top:1px}
+.row-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+.section-lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink3);margin:14px 0 8px}
+code{background:var(--cream);border:1px solid var(--tan);border-radius:4px;padding:1px 5px;font-family:var(--mono);font-size:11px;color:var(--ink2)}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ══ HEADER ══ -->
+<header class="header">
+  <div class="brand">
+    <div class="brand-ico">🐕</div>
+    <div class="brand-name">Go2<span>Companion</span></div>
+  </div>
+  <div class="hstat"><div class="dot" id="conn-dot"></div><span id="conn-txt">Connecting…</span></div>
+  <div class="mode-badge" id="mode-badge">SIM</div>
+  <div class="hspace"></div>
+  <div class="bat-chip">🔋<div class="bat-bar"><div class="bat-fill" id="bat-fill" style="width:87%"></div></div><span id="bat-pct">87%</span></div>
+  <button class="arm-btn" id="arm-btn" onclick="toggleArm()"><span id="arm-ico">🔒</span><span id="arm-txt" data-i18n="commands.arm">Arm</span></button>
+  <button class="estop-btn" id="estop-btn" onclick="triggerEstop()">🛑 <span data-i18n="commands.estop">Stop</span></button>
+</header>
+
+<div class="body">
+
+<!-- ══ SIDENAV ══ -->
+<nav class="sidenav">
+  <div class="nav active" onclick="goTab('home',this)" data-tab="home"><div class="nav-ico">🏠</div><div class="nav-lbl" data-i18n="nav.home">Home</div></div>
+  <div class="nav" onclick="goTab('manual',this)" data-tab="manual"><div class="nav-ico">🕹️</div><div class="nav-lbl" data-i18n="nav.manual">Manual</div></div>
+  <div class="nav" onclick="goTab('tricks',this)" data-tab="tricks"><div class="nav-ico">🎬</div><div class="nav-lbl" data-i18n="nav.tricks">Tricks</div></div>
+  <div class="nav" onclick="goTab('anim',this)" data-tab="anim"><div class="nav-ico">✨</div><div class="nav-lbl" data-i18n="nav.animation">Anim</div></div>
+  <div class="nav" onclick="goTab('objects',this)" data-tab="objects"><div class="nav-ico">🧸</div><div class="nav-lbl" data-i18n="nav.objects">Objects</div></div>
+  <div class="nav" onclick="goTab('missions',this)" data-tab="missions"><div class="nav-ico">🗺️</div><div class="nav-lbl" data-i18n="nav.missions">Missions</div></div>
+  <div class="nav-div"></div>
+  <div class="nav" onclick="goTab('metrics',this)" data-tab="metrics"><div class="nav-ico">📊</div><div class="nav-lbl">Metrics</div></div>
+  <div class="nav" onclick="goTab('bt',this)" data-tab="bt"><div class="nav-ico">🌲</div><div class="nav-lbl">BTree</div></div>
+  <div class="nav" onclick="goTab('settings',this)" data-tab="settings"><div class="nav-ico">⚙️</div><div class="nav-lbl" data-i18n="nav.settings">Settings</div></div>
+  <div class="nav-sp"></div>
+  <div class="nav" onclick="openMin()"><div class="nav-ico">📱</div><div class="nav-lbl">Min</div></div>
+</nav>
+
+<!-- ══ MAIN ══ -->
+<main class="main">
+  <div class="banner sim" id="sim-banner">⚡ Simulation mode — no hardware required. Start backend for full API integration.</div>
+
+  <!-- HOME -->
+  <div class="page active" id="tab-home">
+    <div><div class="page-title" data-i18n="app.subtitle">Your Robot Companion</div><div class="page-sub">Go2 Platform v2.0 — <span id="state-friendly">getting ready</span></div></div>
+    <div class="robo-viz">
+      <canvas id="rcanv" width="800" height="220"></canvas>
+      <div class="vizchips">
+        <div class="vchip"><div class="vd" id="vc-imu" style="background:var(--leaf)"></div><span id="vc-imu-txt">IMU balanced</span></div>
+        <div class="vchip"><div class="vd" id="vc-bat" style="background:var(--leaf)"></div><span id="vc-bat-txt">Battery OK</span></div>
+        <div class="vchip" id="vc-detect" style="display:none"><div class="vd" style="background:var(--sky)"></div><span id="vc-detect-txt">0 objects</span></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div class="ctitle"><span class="ci">🤖</span><span data-i18n-prefix="Robot Status"></span>Robot Status</div>
+        <div class="sbadge idle" id="main-badge">Idle</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:11px">
+          <div class="tcell"><div class="tlbl" data-i18n="telemetry.pitch">Pitch</div><div class="tval ok" id="t-pitch">0.0°</div></div>
+          <div class="tcell"><div class="tlbl" data-i18n="telemetry.roll">Roll</div><div class="tval ok" id="t-roll">0.0°</div></div>
+          <div class="tcell"><div class="tlbl">Ctrl Hz</div><div class="tval ok" id="t-hz">500</div></div>
+          <div class="tcell"><div class="tlbl" data-i18n="telemetry.force">Force</div><div class="tval ok" id="t-force">0N</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ctitle"><span class="ci">⚡</span>Quick Actions</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+          <button class="qa-btn" onclick="cmd('SIT')"><span class="qa-ico">🐾</span><span class="qa-txt" data-i18n="commands.sit">Sit</span></button>
+          <button class="qa-btn" onclick="cmd('STAND')"><span class="qa-ico">🐕</span><span class="qa-txt" data-i18n="commands.stand">Stand</span></button>
+          <button class="qa-btn" onclick="runBeh('tail_wag')"><span class="qa-ico">🎉</span><span class="qa-txt">Happy!</span></button>
+          <button class="qa-btn" onclick="runBeh('head_tilt')"><span class="qa-ico">🤔</span><span class="qa-txt">Curious</span></button>
+          <button class="qa-btn" onclick="runBeh('zoomies')"><span class="qa-ico">💨</span><span class="qa-txt">Zoomies!</span></button>
+          <button class="qa-btn" onclick="cmd('FOLLOW')"><span class="qa-ico">👣</span><span class="qa-txt" data-i18n="commands.follow">Follow Me</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MANUAL -->
+  <div class="page" id="tab-manual">
+    <div><div class="page-title">Manual Control</div><div class="page-sub">Direct robot operation</div></div>
+    <div class="grid2">
+      <div class="card">
+        <div class="ctitle"><span class="ci">🕹️</span>Movement</div>
+        <div class="js-wrap">
+          <div class="js-base" id="js-base">
+            <div class="js-ring"></div>
+            <div class="js-knob" id="js-knob">🐾</div>
+          </div>
+        </div>
+        <div class="js-vals" id="js-vals">x: 0.00  y: 0.00</div>
+      </div>
+      <div class="card">
+        <div class="ctitle"><span class="ci">🎮</span>Body Control</div>
+        <div class="thresh-row"><div class="thresh-hdr"><span class="thresh-name">Height</span><span class="thresh-val" id="bc-h">0.30m</span></div><input type="range" min="0.15" max="0.45" step="0.01" value="0.30" oninput="bctrl('height',+this.value)"></div>
+        <div class="thresh-row"><div class="thresh-hdr"><span class="thresh-name">Roll</span><span class="thresh-val" id="bc-r">0°</span></div><input type="range" min="-15" max="15" step="1" value="0" oninput="bctrl('roll',+this.value)"></div>
+        <div class="thresh-row"><div class="thresh-hdr"><span class="thresh-name">Yaw</span><span class="thresh-val" id="bc-y">0°</span></div><input type="range" min="-30" max="30" step="1" value="0" oninput="bctrl('yaw',+this.value)"></div>
+        <div class="thresh-row"><div class="thresh-hdr"><span class="thresh-name">Speed</span><span class="thresh-val" id="bc-s">0.5m/s</span></div><input type="range" min="0.1" max="1.5" step="0.05" value="0.5" oninput="bctrl('speed',+this.value)"></div>
+        <div class="ctitle" style="margin-top:14px"><span class="ci">💨</span>Behavior Policy</div>
+        <div class="pol-grid">
+          <div class="pol-opt active" onclick="setPolicy('SMOOTH',this)"><div class="pol-ico">🌊</div><div class="pol-name">Smooth</div><div class="pol-desc">Fluid, indoor</div></div>
+          <div class="pol-opt" onclick="setPolicy('AGILE',this)"><div class="pol-ico">⚡</div><div class="pol-name">Agile</div><div class="pol-desc">Fast, reactive</div></div>
+          <div class="pol-opt" onclick="setPolicy('STABLE',this)"><div class="pol-ico">⛰️</div><div class="pol-name">Stable</div><div class="pol-desc">Terrain-safe</div></div>
+          <div class="pol-opt" onclick="setPolicy('ADAPTIVE',this)"><div class="pol-ico">🧠</div><div class="pol-name">Adaptive</div><div class="pol-desc">Auto-select</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRICKS -->
+  <div class="page" id="tab-tricks">
+    <div class="row-hdr"><div><div class="page-title" data-i18n="missions.title">Tricks &amp; Behaviors</div><div class="page-sub">Tap to perform</div></div></div>
+    <div class="cat-pills" id="cat-pills"><div class="cpill active" onclick="filterCat('all',this)">All</div></div>
+    <div class="beh-grid" id="beh-grid"></div>
+  </div>
+
+  <!-- ANIMATION STUDIO -->
+  <div class="page" id="tab-anim">
+    <div class="row-hdr">
+      <div><div class="page-title" data-i18n="animation.title">Animation Studio</div><div class="page-sub">Load, preview, and play motion clips</div></div>
+    </div>
+    <div class="anim-player card" style="padding:0">
+      <canvas id="acanv" width="800" height="120"></canvas>
+      <div style="padding:10px 14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+          <div style="font-weight:600;font-size:12px;color:var(--ink2)" id="anim-clip-name">No animation loaded</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--ink3)" id="anim-time">0.0s / 0.0s</div>
+        </div>
+        <div class="anim-timeline" id="anim-tl" onclick="seekAnim(event)"><div class="anim-head" id="anim-head" style="width:0%"></div></div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:10px">
+          <button class="btn btn-p" style="padding:6px 14px;font-size:12px" onclick="animPlay()" id="anim-play-btn">▶ Play</button>
+          <button class="btn btn-ghost" style="padding:6px 14px;font-size:12px" onclick="animPause()">⏸</button>
+          <button class="btn btn-ghost" style="padding:6px 14px;font-size:12px" onclick="animStop()">⏹</button>
+          <div style="flex:1"></div>
+          <label class="tlbl" style="margin:0">Speed</label>
+          <input type="range" min="0.25" max="2" step="0.25" value="1" oninput="animSpeed(+this.value)" style="width:80px">
+          <span id="anim-speed-val" style="font-family:var(--mono);font-size:11px;color:var(--ambD);min-width:28px">1×</span>
+          <label class="toggle"><input type="checkbox" id="anim-loop" onchange="animToggleLoop(this.checked)"><span class="ttrack"></span></label>
+          <span style="font-size:11px;color:var(--ink3)">Loop</span>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ctitle"><span class="ci">📂</span>Load Animation</div>
+      <div class="fmt-grid">
+        <div class="fmt-btn" onclick="loadAnimFormat('funscript')"><div class="fmt-ico">🎬</div>FunScript</div>
+        <div class="fmt-btn" onclick="loadAnimFormat('bvh')"><div class="fmt-ico">🦾</div>BVH Motion</div>
+        <div class="fmt-btn" onclick="loadAnimFormat('json')"><div class="fmt-ico">📋</div>Go2 JSON</div>
+        <div class="fmt-btn" onclick="loadAnimFormat('csv')"><div class="fmt-ico">📊</div>CSV Keyframes</div>
+      </div>
+      <input type="file" id="anim-file-input" style="display:none" onchange="handleAnimFile(event)">
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost" onclick="loadBuiltinAnim('idle_breath')" style="font-size:12px">💤 Breathing</button>
+        <button class="btn btn-ghost" onclick="loadBuiltinAnim('tail_wag')" style="font-size:12px">🎉 Tail Wag</button>
+        <button class="btn btn-ghost" onclick="loadBuiltinAnim('head_tilt')" style="font-size:12px">🤔 Head Tilt</button>
+        <button class="btn btn-ghost" onclick="loadBuiltinAnim('sit_down')" style="font-size:12px">🐾 Sit Down</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ctitle"><span class="ci">💾</span>Export</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-o" onclick="exportAnim('funscript')" style="font-size:12px">Export FunScript</button>
+        <button class="btn btn-o" onclick="exportAnim('json')" style="font-size:12px">Export Go2 JSON</button>
+      </div>
+    </div>
+    <div id="anim-clips-list"></div>
+  </div>
+
+  <!-- OBJECTS -->
+  <div class="page" id="tab-objects">
+    <div class="row-hdr">
+      <div><div class="page-title" data-i18n="objects.title">Objects &amp; Props</div><div class="page-sub" data-i18n="objects.subtitle">Manage your robot's world</div></div>
+      <button class="btn btn-p" onclick="openAddObj()" style="flex-shrink:0">+ Add</button>
+    </div>
+    <div id="obj-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:9px"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-o" onclick="exportObjs()">⬇ Export</button>
+      <button class="btn btn-o" onclick="importObjs()">⬆ Import</button>
+    </div>
+    <input type="file" id="obj-import-input" accept=".json" style="display:none" onchange="handleObjImport(event)">
+  </div>
+
+  <!-- MISSIONS -->
+  <div class="page" id="tab-missions">
+    <div><div class="page-title" data-i18n="missions.title">Missions</div><div class="page-sub" data-i18n="missions.subtitle">Autonomous tasks and patrol routes</div></div>
+    <div id="mission-list" style="display:flex;flex-direction:column;gap:9px"></div>
+    <div class="card">
+      <div class="ctitle"><span class="ci">➕</span>New Mission</div>
+      <div class="grid2" style="margin-bottom:10px">
+        <div><label class="lbl" data-i18n="missions.types.patrol">Type</label><select id="m-type"><option value="patrol">🗺️ Patrol</option><option value="follow">👣 Follow</option><option value="inspect">🔍 Inspect</option><option value="sequence">🎬 Sequence</option></select></div>
+        <div><label class="lbl">Name</label><input type="text" id="m-name" placeholder="My patrol"></div>
+      </div>
+      <button class="btn btn-p" style="width:100%" onclick="createMission()">Create Mission</button>
+    </div>
+  </div>
+
+  <!-- METRICS -->
+  <div class="page" id="tab-metrics">
+    <div><div class="page-title">Observability</div><div class="page-sub">Platform metrics, health, and traces</div></div>
+    <div class="card">
+      <div class="ctitle"><span class="ci">📊</span>Key Metrics</div>
+      <div class="metrics-grid" id="metrics-grid">
+        <div class="mcard"><div class="mval ok" id="m-uptime">0s</div><div class="mlbl">Uptime</div></div>
+        <div class="mcard"><div class="mval" id="m-cmds">0</div><div class="mlbl">Commands</div></div>
+        <div class="mcard"><div class="mval ok" id="m-estops">0</div><div class="mlbl">E-Stops</div></div>
+        <div class="mcard"><div class="mval ok" id="m-trips">0</div><div class="mlbl">Safety Trips</div></div>
+        <div class="mcard"><div class="mval" id="m-battery">–%</div><div class="mlbl">Battery</div></div>
+        <div class="mcard"><div class="mval" id="m-latency">–ms</div><div class="mlbl">Cmd P95</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ctitle"><span class="ci">💚</span>Health Checks</div>
+      <div id="health-list"></div>
+    </div>
+    <div class="card">
+      <div class="ctitle"><span class="ci">🔭</span>Prometheus Format <button class="btn btn-ghost" style="padding:3px 10px;font-size:11px;margin-left:auto" onclick="fetchProm()">Refresh</button></div>
+      <div class="prom-box" id="prom-box">// Click Refresh to load</div>
+    </div>
+  </div>
+
+  <!-- BEHAVIOR TREE -->
+  <div class="page" id="tab-bt">
+    <div><div class="page-title">Behavior Tree</div><div class="page-sub">Real-time autonomy visualization</div></div>
+    <div class="bt-viz card" style="padding:0">
+      <canvas id="btcanv" width="800" height="280"></canvas>
+      <div class="bt-legend">
+        <div class="bt-l"><div class="bls" style="background:var(--leaf)"></div>SUCCESS</div>
+        <div class="bt-l"><div class="bls" style="background:var(--rose)"></div>FAILURE</div>
+        <div class="bt-l"><div class="bls" style="background:var(--amber)"></div>RUNNING</div>
+        <div class="bt-l"><div class="bls" style="background:var(--cream);border:1px solid var(--tan)"></div>IDLE</div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div class="ctitle"><span class="ci">📋</span>Blackboard</div>
+        <div id="bb-list" style="font-family:var(--mono);font-size:11px;color:var(--ink2);max-height:140px;overflow-y:auto"></div>
+      </div>
+      <div class="card">
+        <div class="ctitle"><span class="ci">⚙️</span>BT Controls</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button class="btn btn-p" onclick="btCmd('start')" style="font-size:12px">▶ Start Tree</button>
+          <button class="btn btn-ghost" onclick="btCmd('stop')" style="font-size:12px">⏹ Stop Tree</button>
+          <div id="bt-status" style="font-size:11px;color:var(--ink3)">Status: unknown</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="page" id="tab-settings">
+    <div><div class="page-title" data-i18n="settings.title">Settings</div></div>
+
+    <!-- Language picker -->
+    <div class="card">
+      <div class="ctitle"><span class="ci">🌐</span><span data-i18n="settings.language">Language</span></div>
+      <div class="lang-grid" id="lang-grid"></div>
+    </div>
+
+    <!-- Connection -->
+    <div class="card">
+      <div class="ctitle"><span class="ci">🔌</span><span data-i18n="settings.connection">Connection</span></div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input type="text" id="api-url" value="http://localhost:8080" style="flex:1">
+        <button class="btn btn-o" onclick="reconnect()" style="font-size:12px">Connect</button>
+      </div>
+      <div class="srow"><div><div class="slabel" data-i18n="settings.simulation">Simulation Mode</div><div class="sdesc">Browser simulation — no hardware needed</div></div><label class="toggle"><input type="checkbox" id="sim-chk" checked onchange="P.simMode=this.checked"><span class="ttrack"></span></label></div>
+      <div class="srow"><div><div class="slabel">Debug Mode</div><div class="sdesc">Show extra telemetry and logs</div></div><label class="toggle"><input type="checkbox" id="debug-chk" onchange="P.debug=this.checked"><span class="ttrack"></span></label></div>
+    </div>
+
+    <!-- Safety thresholds -->
+    <div class="card">
+      <div class="ctitle"><span class="ci">🛡️</span><span data-i18n="settings.safety">Safety Limits</span></div>
+      <div class="thresh-row"><div class="thresh-hdr"><span class="thresh-name">Max Pitch</span><span class="thresh-val" id="th-pitch">10°</span></div><input type="range" min="5" max="25" value="10" oninput="updateThresh('pitch',+this.value)"></div>
+      <div class="thresh-row"><div class="thresh-hdr"><span class="thresh-name">Max Roll</span><span class="thresh-val" id="th-roll">10°</span></div><input type="range" min="5" max="25" value="10" oninput="updateThresh('roll',+this.value)"></div>
+      <div class="thresh-row"><div class="thresh-hdr"><span class="thresh-name">Max Force</span><span class="thresh-val" id="th-force">30N</span></div><input type="range" min="10" max="60" value="30" oninput="updateThresh('force',+this.value)"></div>
+    </div>
+
+    <!-- AI Generator -->
+    <div class="card">
+      <div class="ctitle"><span class="ci">🤖</span><span data-i18n="settings.ai">AI Behavior Generator</span></div>
+      <div class="ai-sec">
+        <div class="grid2" style="margin-bottom:8px">
+          <div><label class="lbl">Mood</label><select id="ai-mood"><option>playful</option><option>gentle</option><option>excited</option><option>curious</option><option>affectionate</option></select></div>
+          <div><label class="lbl">Object</label><select id="ai-obj"><option>soft cushion</option><option>wooden chair</option><option>plush toy</option><option>rubber ball</option></select></div>
+        </div>
+        <input type="password" id="ai-key" placeholder="Anthropic API key (sk-ant-…)" style="margin-bottom:8px">
+        <button class="btn btn-p" style="width:100%" onclick="genAI()" id="ai-btn">✨ Generate Behavior</button>
+        <div class="ai-out" id="ai-out">// Parameters will appear here</div>
+      </div>
+    </div>
+
+    <!-- Appearance -->
+    <div class="card">
+      <div class="ctitle"><span class="ci">🎨</span><span data-i18n="settings.appearance">Appearance</span></div>
+      <div class="srow"><div><div class="slabel" data-i18n="settings.theme.warm">Theme</div></div><select onchange="setTheme(this.value)" style="width:140px"><option value="warm">Warm (default)</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
+      <div class="srow"><div><div class="slabel">Animation Speed</div></div><select style="width:140px"><option>Normal</option><option>Fast</option><option>Slow</option></select></div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ══ RIGHT PANEL ══ -->
+<aside class="rpanel">
+  <div class="rptabs">
+    <div class="rptab active" onclick="rpTab('tel',this)">Telemetry</div>
+    <div class="rptab" onclick="rpTab('nodes',this)">Nodes</div>
+    <div class="rptab" onclick="rpTab('log',this)">Log</div>
+    <div class="rptab" onclick="rpTab('plugins',this)">Plugins</div>
+  </div>
+  <div class="rpcontent">
+    <div class="rpsec active" id="rps-tel">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:9px">
+        <div class="tcell"><div class="tlbl">Pitch</div><div class="tval ok" id="r-pitch">0.0°</div></div>
+        <div class="tcell"><div class="tlbl">Roll</div><div class="tval ok" id="r-roll">0.0°</div></div>
+        <div class="tcell"><div class="tlbl">Yaw</div><div class="tval" id="r-yaw">0.0°</div></div>
+        <div class="tcell"><div class="tlbl">Force</div><div class="tval ok" id="r-cf">0N</div></div>
+        <div class="tcell"><div class="tlbl">Voltage</div><div class="tval" id="r-volt">29.4V</div></div>
+        <div class="tcell"><div class="tlbl">Ctrl Hz</div><div class="tval ok" id="r-hz">500</div></div>
+      </div>
+      <div class="section-lbl">Foot Forces (N)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:9px">
+        <div class="tcell"><div class="tlbl">FL</div><div class="tval" id="r-fl">13</div></div>
+        <div class="tcell"><div class="tlbl">FR</div><div class="tval" id="r-fr">12</div></div>
+        <div class="tcell"><div class="tlbl">RL</div><div class="tval" id="r-rl">14</div></div>
+        <div class="tcell"><div class="tlbl">RR</div><div class="tval" id="r-rr">13</div></div>
+      </div>
+      <div class="section-lbl">Motor Temps (°C)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+        <div class="tcell"><div class="tlbl">FL</div><div class="tval" id="r-tfl">42°</div></div>
+        <div class="tcell"><div class="tlbl">FR</div><div class="tval" id="r-tfr">43°</div></div>
+        <div class="tcell"><div class="tlbl">RL</div><div class="tval" id="r-trl">41°</div></div>
+        <div class="tcell"><div class="tlbl">RR</div><div class="tval" id="r-trr">42°</div></div>
+      </div>
+    </div>
+    <div class="rpsec" id="rps-nodes"><div id="nodes-list"></div></div>
+    <div class="rpsec" id="rps-log">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+        <span style="font-size:11px;color:var(--ink3)">Recent events</span>
+        <button onclick="P.logs=[];renderLog()" style="font-size:11px;color:var(--ink3);background:none;border:none;text-decoration:underline;cursor:pointer">Clear</button>
+      </div>
+      <div id="log-list"></div>
+    </div>
+    <div class="rpsec" id="rps-plugins"><div id="plugins-list" style="font-size:12px;color:var(--ink3)">Loading…</div></div>
+  </div>
+</aside>
+</div>
+</div>
+
+<!-- MINIMAL OVERLAY -->
+<div class="minover" id="minover">
+  <div class="min-estop" onclick="triggerEstop()" title="Emergency Stop">🛑</div>
+  <div class="min-state" id="min-state">Ready</div>
+  <div style="display:flex;gap:12px">
+    <button class="btn btn-o" onclick="toggleArm()">ARM</button>
+  </div>
+  <div style="font-size:13px;color:var(--ink3);cursor:pointer;text-decoration:underline" onclick="closeMin()">← Back to full view</div>
+</div>
+
+<!-- ADD OBJECT MODAL -->
+<div id="add-obj-modal" style="display:none;position:fixed;inset:0;background:rgba(45,38,32,.5);z-index:100;align-items:center;justify-content:center">
+  <div style="background:var(--warm);border-radius:var(--r4);padding:22px;width:400px;max-width:95vw;box-shadow:var(--lg);max-height:85vh;overflow-y:auto">
+    <div style="font-family:var(--serif);font-size:18px;font-weight:600;margin-bottom:14px;color:var(--ink)">Add Object 🧸</div>
+    <div class="grid2" style="margin-bottom:9px">
+      <div><label class="lbl">ID</label><input type="text" id="ao-id" placeholder="cushion_red"></div>
+      <div><label class="lbl">Name</label><input type="text" id="ao-name" placeholder="Red Cushion"></div>
+    </div>
+    <div style="margin-bottom:9px"><label class="lbl">Type</label><select id="ao-type"><option value="soft_prop">Soft Prop</option><option value="hard_prop">Hard Prop</option><option value="medium_prop">Medium</option><option value="interactive">Interactive</option></select></div>
+    <div style="margin-bottom:9px"><label class="lbl">Affordances (comma separated)</label><input type="text" id="ao-aff" placeholder="mount_play, knead, nuzzle"></div>
+    <div style="margin-bottom:9px"><label class="lbl">Moods</label><input type="text" id="ao-moods" placeholder="playful, gentle"></div>
+    <div class="grid2" style="margin-bottom:14px">
+      <div><label class="lbl">Max Force (N)</label><input type="number" id="ao-force" value="20" min="1" max="100"></div>
+      <div><label class="lbl">Notes</label><input type="text" id="ao-notes" placeholder="Optional"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeAddObj()">Cancel</button>
+      <button class="btn btn-p" onclick="submitAddObj()">Add Object</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ╔═══════════════════════════════════════════════════════════════════════╗
+// ║  GO2 PLATFORM UI  —  API-driven, zero robot logic in JS               ║
+// ╚═══════════════════════════════════════════════════════════════════════╝
+
+const P = {
+  connected:false, armed:false, estop:false, simMode:true, debug:false,
+  ws:null, apiBase:'http://localhost:8080',
+  state:'offline', policy:'SMOOTH', locale:'en',
+  behaviors:[], objects:[], missions:[], logs:[],
+  nodes:[
+    {id:'safety',name:'/go2/safety_node',st:'ok'},
+    {id:'fsm',name:'/go2/behavior_fsm',st:'ok'},
+    {id:'motion',name:'/go2/motion_ctrl',st:'ok'},
+    {id:'perception',name:'/go2/perception',st:'ok'},
+    {id:'bt',name:'/go2/behavior_tree',st:'ok'},
+    {id:'anim',name:'/go2/animation',st:'ok'},
+    {id:'connect',name:'/go2/connectivity',st:'ok'},
+  ],
+  telemetry:{battery_pct:87,pitch_deg:0,roll_deg:0,yaw_deg:0,contact_force_n:0,
+    voltage:29.4,motor_temps:{fl:42,fr:43,rl:41,rr:42},foot_forces:{fl:13,fr:12,rl:14,rr:13}},
+  selCat:'all', btTree:null, btBB:{},
+  anim:{clips:{},current:null,playing:false,elapsed:0,duration:0,speed:1,loop:false},
+  i18n:{},
+  detections:[],
+};
+
+// ── i18n ──────────────────────────────────────────────────────────────────
+
+async function loadI18n(locale) {
+  if(!P.connected){P.i18n={}; return;}
+  try {
+    const r = await apiFetch('/api/v1/i18n/translations/'+locale);
+    P.i18n = r || {};
+    P.locale = locale;
+    applyI18n();
+    log('ok','Language: '+locale);
+  } catch(e) { log('warn','i18n fetch failed: '+e.message); }
+}
+
+function t(key, vars={}) {
+  const parts = key.split('.');
+  let node = P.i18n;
+  for(const p of parts){
+    if(typeof node !== 'object') return key;
+    node = node[p];
+  }
+  if(typeof node !== 'string') return key;
+  return node.replace(/\{(\w+)\}/g, (_,k) => vars[k] !== undefined ? vars[k] : '{'+k+'}');
+}
+
+function applyI18n() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const k = el.getAttribute('data-i18n');
+    const v = t(k);
+    if(v !== k) el.textContent = v;
+  });
+}
+
+async function setLocale(code) {
+  P.locale = code;
+  document.querySelectorAll('.lang-opt').forEach(el => el.classList.toggle('active', el.dataset.code === code));
+  if(P.connected) {
+    try {
+      await apiFetch('/api/v1/i18n/locale/'+code, {method:'POST'});
+    } catch(e) {}
+    await loadI18n(code);
+  }
+  log('ok','Language switched to: '+code);
+}
+
+function renderLangGrid() {
+  const langs = [
+    {code:'en',flag:'🇬🇧',name:'English'},
+    {code:'es',flag:'🇪🇸',name:'Español'},
+    {code:'fr',flag:'🇫🇷',name:'Français'},
+    {code:'de',flag:'🇩🇪',name:'Deutsch'},
+    {code:'ja',flag:'🇯🇵',name:'日本語'},
+    {code:'zh',flag:'🇨🇳',name:'中文'},
+    {code:'ko',flag:'🇰🇷',name:'한국어'},
+    {code:'pt',flag:'🇧🇷',name:'Português'},
+  ];
+  const grid = el('lang-grid');
+  if(!grid) return;
+  grid.innerHTML = langs.map(l => `
+    <div class="lang-opt ${l.code===P.locale?'active':''}" data-code="${l.code}" onclick="setLocale('${l.code}')">
+      <div class="lang-flag">${l.flag}</div>
+      <div><div class="lang-name">${l.name}</div><div class="lang-code">${l.code}</div></div>
+    </div>`).join('');
+}
+
+// ── Logging ───────────────────────────────────────────────────────────────
+function log(lvl,msg){
+  const ts = new Date().toTimeString().slice(0,8);
+  P.logs.unshift({ts,lvl,msg});
+  if(P.logs.length>300) P.logs.pop();
+  renderLog();
+}
+function renderLog(){
+  const el2=el('log-list'); if(!el2) return;
+  el2.innerHTML = P.logs.slice(0,80).map(e =>
+    `<div class="log-entry"><span class="log-ts">${e.ts}</span><span class="log-lvl ${e.lvl}">${e.lvl}</span><span class="log-msg">${e.msg}</span></div>`).join('');
+}
+
+// ── API helpers ───────────────────────────────────────────────────────────
+async function apiFetch(path, opts={}) {
+  const token = localStorage.getItem('go2_token') || '';
+  const headers = {'Content-Type':'application/json'};
+  if(token) headers['Authorization'] = 'Bearer '+token;
+  const r = await fetch(P.apiBase+path, {headers, ...opts});
+  if(!r.ok){const d=await r.json().catch(()=>({})); throw new Error(d.detail||d.error||r.status);}
+  return r.json();
+}
+
+async function apiCmd(action, params={}) {
+  log('info','→ '+action);
+  if(P.simMode || !P.connected){simCmd(action,params); return {ok:true};}
+  try {
+    const r = await apiFetch('/api/v1/command',{method:'POST',body:JSON.stringify({action,...params})});
+    if(r.ok!==false) log('ok','✓ '+action); else log('err','✗ '+action+': '+(r.reason||r.msg));
+    return r;
+  } catch(e){ log('err',action+' failed: '+e.message); return {ok:false}; }
+}
+
+function simCmd(action, params={}) {
+  const sm = {STAND:'standing',SIT:'sitting',WALK:'walking',FOLLOW:'following',
+               NAVIGATE:'navigating',INTERACT:'interacting',PERFORM:'performing',
+               RUN_BEHAVIOR:'performing'};
+  if(sm[action]){P.state=sm[action];applyFSM({state:P.state,armed:P.armed});}
+  if(action==='ARM'){P.armed=true;applyFSM({state:P.state,armed:true});}
+  if(action==='DISARM'){P.armed=false;applyFSM({state:P.state,armed:false});}
+  if(action==='ESTOP'){P.estop=true;P.state='estop';applyFSM({state:'estop',armed:P.armed});}
+  if(action==='CLEAR_ESTOP'){P.estop=false;P.state='idle';applyFSM({state:'idle',armed:false});}
+  if(action==='RUN_BEHAVIOR'){
+    const b = P.behaviors.find(b=>b.id===params.behavior_id);
+    if(b?.duration_s) setTimeout(()=>{P.state='standing';applyFSM({state:'standing',armed:P.armed});log('ok','Behavior complete: '+b.name);},b.duration_s*1000);
+  }
+}
+
+// ── State application ─────────────────────────────────────────────────────
+const STATE_FRIENDLY = {
+  offline:'offline',idle:'resting',standing:'standing',sitting:'sitting',
+  walking:'going for a walk',following:'following you',navigating:'navigating',
+  interacting:'playing',performing:'performing a trick',patrolling:'on patrol',
+  fault:'needs attention ⚠️',estop:'stopped 🛑'
+};
+
+function applyFSM(data) {
+  const s = data.state||'offline';
+  P.state=s; P.armed=data.armed||false;
+  const f=STATE_FRIENDLY[s]||s;
+  const sf=el('state-friendly'); if(sf) sf.textContent=f;
+  const ms=el('min-state'); if(ms) ms.textContent=f.charAt(0).toUpperCase()+f.slice(1);
+  const b=el('main-badge'); if(b){
+    const cls = s==='estop'?'estop':s==='fault'?'fault':(s!=='idle'&&s!=='offline'?'active':'idle');
+    b.className='sbadge '+cls; b.textContent=s.charAt(0).toUpperCase()+s.slice(1);
+  }
+  updateArmBtn();
+}
+
+function applyTelemetry(t) {
+  if(!t) return;
+  P.telemetry = {...P.telemetry,...t};
+  // Battery
+  const bp = Math.round(t.battery_pct||0);
+  const bc = bp>30?'var(--leaf)':bp>15?'var(--amber)':'var(--rose)';
+  const bf=el('bat-fill'); if(bf){bf.style.width=bp+'%';bf.style.background=bc;}
+  const bp2=el('bat-pct'); if(bp2) bp2.textContent=bp+'%';
+  const vcb=el('vc-bat'); if(vcb) vcb.style.background=bc;
+  const vbt=el('vc-bat-txt'); if(vbt) vbt.textContent='Battery '+bp+'%';
+
+  // Telemetry cells
+  const tvs=(id,v,w,d,fmt)=>{const e=el(id);if(!e)return;e.textContent=fmt(v);e.className='tval '+(v>=d?'err':v>=w?'warn':'ok')};
+  const p=t.pitch_deg||0, r=t.roll_deg||0, cf=t.contact_force_n||0;
+  tvs('t-pitch',Math.abs(p),6,10,v=>(p>=0?'+':'')+p.toFixed(1)+'°');
+  tvs('t-roll', Math.abs(r),6,10,v=>(r>=0?'+':'')+r.toFixed(1)+'°');
+  tvs('t-force',cf,20,30,v=>Math.round(v)+'N');
+  tvs('r-pitch',Math.abs(p),6,10,v=>p.toFixed(1)+'°');
+  tvs('r-roll', Math.abs(r),6,10,v=>r.toFixed(1)+'°');
+  tvs('r-cf',cf,20,30,v=>Math.round(v)+'N');
+  const ey=el('r-yaw'); if(ey) ey.textContent=(t.yaw_deg||0).toFixed(1)+'°';
+  const ev=el('r-volt'); if(ev) ev.textContent=(t.voltage||0).toFixed(1)+'V';
+  const ff=t.foot_forces||{};
+  ['fl','fr','rl','rr'].forEach(k=>{const e2=el('r-'+k);if(e2)e2.textContent=Math.round(ff[k]||0);});
+  const mt=t.motor_temps||{};
+  ['fl','fr','rl','rr'].forEach(k=>{
+    const e2=el('r-t'+k); if(!e2) return;
+    const v2=Math.round(mt[k]||0); e2.textContent=v2+'°';
+    e2.className='tval '+(v2>72?'err':v2>58?'warn':'ok');
+  });
+
+  // IMU chip
+  const imuOk=Math.abs(p)<6&&Math.abs(r)<6;
+  const vi=el('vc-imu'); if(vi) vi.style.background=imuOk?'var(--leaf)':Math.abs(p)>9||Math.abs(r)>9?'var(--rose)':'var(--amber)';
+  const vit=el('vc-imu-txt'); if(vit) vit.textContent=imuOk?'IMU balanced':'Pitch '+p.toFixed(1)+'°';
+  drawRobot(t);
+}
+
+// ── E-STOP / ARM ──────────────────────────────────────────────────────────
+async function triggerEstop() {
+  if(P.estop){
+    P.estop=false;
+    const b=el('estop-btn'); b.innerHTML='🛑 <span data-i18n="commands.estop">Stop</span>';
+    b.classList.remove('fired');
+    await apiCmd('CLEAR_ESTOP');
+    log('warn','E-STOP cleared — re-arm before operating');
+    return;
+  }
+  P.estop=true;
+  const b=el('estop-btn'); b.innerHTML='✅ Reset'; b.classList.add('fired');
+  await apiCmd('ESTOP');
+  log('err','!!! E-STOP triggered');
+}
+
+async function toggleArm(){
+  if(P.estop){log('err','Cannot arm — E-STOP active');return;}
+  P.armed=!P.armed;
+  await apiCmd(P.armed?'ARM':'DISARM');
+  updateArmBtn();
+}
+
+function updateArmBtn(){
+  const b=el('arm-btn'); if(!b) return;
+  el('arm-ico').textContent=P.armed?'🔓':'🔒';
+  el('arm-txt').textContent=P.armed?t('status.armed')||'Armed':t('commands.arm')||'Arm';
+  b.className='arm-btn'+(P.armed?' armed':'');
+}
+
+// ── Commands ──────────────────────────────────────────────────────────────
+function cmd(action){apiCmd(action);}
+function runBeh(id){
+  apiCmd('RUN_BEHAVIOR',{behavior_id:id});
+  markRunning(id);
+}
+function markRunning(id){
+  document.querySelectorAll('.beh-btn').forEach(b=>{b.classList.toggle('running',b.dataset.id===id)});
+  const b=P.behaviors.find(b=>b.id===id);
+  if(b?.duration_s) setTimeout(()=>document.querySelectorAll('.beh-btn').forEach(b=>b.classList.remove('running')),b.duration_s*1000);
+}
+async function setPolicy(name,el2){
+  P.policy=name;
+  document.querySelectorAll('.pol-opt').forEach(e=>e.classList.remove('active'));
+  if(el2) el2.classList.add('active');
+  await apiCmd('SET_POLICY',{policy:name});
+  log('ok','Policy: '+name);
+}
+function bctrl(param,val){
+  const lm={height:'bc-h',roll:'bc-r',yaw:'bc-y',speed:'bc-s'};
+  const fm={height:v=>(+v).toFixed(2)+'m',roll:v=>Math.round(+v)+'°',yaw:v=>Math.round(+v)+'°',speed:v=>(+v).toFixed(1)+'m/s'};
+  const e2=el(lm[param]); if(e2) e2.textContent=fm[param](val);
+  apiCmd('BODY_CTRL',{[param]:val});
+}
+
+// ── Behaviors ─────────────────────────────────────────────────────────────
+async function loadBehaviors(){
+  try{const r=await apiFetch('/api/v1/behaviors');P.behaviors=r.behaviors||[];}
+  catch(e){loadBuiltinBehaviors();}
+  renderBehaviors();
+}
+function loadBuiltinBehaviors(){
+  P.behaviors=[
+    {id:'sit',name:'Sit',category:'posture',icon:'🐾',duration_s:1.5},
+    {id:'stand',name:'Stand',category:'posture',icon:'🐕',duration_s:1.2},
+    {id:'stretch',name:'Stretch',category:'posture',icon:'🐶',duration_s:2.0},
+    {id:'head_tilt',name:'Head Tilt',category:'express',icon:'🤔',duration_s:1.0},
+    {id:'tail_wag',name:'Happy Wag',category:'express',icon:'🎉',duration_s:2.5},
+    {id:'roll_over',name:'Roll Over',category:'trick',icon:'🔄',duration_s:3.0},
+    {id:'paw_shake',name:'Shake Paw',category:'trick',icon:'🤝',duration_s:2.0},
+    {id:'zoomies',name:'Zoomies!',category:'play',icon:'💨',duration_s:4.0},
+    {id:'play_bow',name:'Play Bow',category:'play',icon:'🙇',duration_s:1.5},
+    {id:'follow',name:'Follow Me',category:'companion',icon:'👣'},
+    {id:'patrol',name:'Patrol',category:'mission',icon:'🗺️'},
+    {id:'idle_breath',name:'Breathing',category:'idle',icon:'💤'},
+  ];
+}
+function renderBehaviors(){
+  const cats=[...new Set(P.behaviors.map(b=>b.category))];
+  const pf=el('cat-pills');
+  if(pf) pf.innerHTML=`<div class="cpill ${P.selCat==='all'?'active':''}" onclick="filterCat('all',this)">All</div>`+cats.map(c=>`<div class="cpill ${P.selCat===c?'active':''}" onclick="filterCat('${c}',this)">${c}</div>`).join('');
+  const bg=el('beh-grid'); if(!bg) return;
+  const filtered=P.selCat==='all'?P.behaviors:P.behaviors.filter(b=>b.category===P.selCat);
+  bg.innerHTML=filtered.map(b=>`
+    <div class="beh-btn fade-in" data-id="${b.id}" onclick="runBeh('${b.id}')">
+      <div class="beh-ico">${b.icon||'🐾'}</div>
+      <div class="beh-name">${b.name}</div>
+      <div class="beh-cat">${b.category}</div>
+    </div>`).join('');
+}
+function filterCat(cat,el2){
+  P.selCat=cat;
+  document.querySelectorAll('.cpill').forEach(p=>p.classList.remove('active'));
+  if(el2) el2.classList.add('active');
+  renderBehaviors();
+}
+
+// ── Objects ───────────────────────────────────────────────────────────────
+async function loadObjects(){
+  try{const r=await apiFetch('/api/v1/objects');P.objects=r.objects||[];}
+  catch(e){P.objects=[
+    {id:'cushion_blue',name:'Blue Cushion',type:'soft_prop',affordances:['mount_play','knead'],moods:['playful'],max_force_n:20,pos:{x:0,y:0,z:0.4}},
+    {id:'chair1',name:'Wooden Chair',type:'hard_prop',affordances:['scratch','shake'],moods:['excited'],max_force_n:30,pos:{x:0,y:0.2,z:0.5}},
+    {id:'plush_dog',name:'Plush Dog',type:'soft_prop',affordances:['nuzzle','knead'],moods:['affectionate'],max_force_n:15,pos:{x:0.3,y:0,z:0.3}},
+  ];}
+  renderObjects();
+}
+function renderObjects(){
+  const grid=el('obj-grid'); if(!grid) return;
+  grid.innerHTML=P.objects.map((o,i)=>`
+    <div class="obj-card" onclick="selObj(${i})">
+      <span class="obj-fn">${o.max_force_n}N</span>
+      <div class="obj-name">${o.name||o.id}</div>
+      <div class="obj-type">${o.type}</div>
+      <div class="obj-tags">${(o.affordances||[]).map(a=>`<span class="tag a">${a}</span>`).join('')}${(o.moods||[]).map(m=>`<span class="tag m">${m}</span>`).join('')}</div>
+    </div>`).join('');
+}
+function selObj(i){
+  const o=P.objects[i];
+  log('ok','Target: '+o.name+' (max '+o.max_force_n+'N)');
+  apiCmd('SET_TARGET',{object_id:o.id});
+  document.querySelectorAll('.obj-card').forEach((c,j)=>c.classList.toggle('sel',j===i));
+}
+function openAddObj(){el('add-obj-modal').style.display='flex';}
+function closeAddObj(){el('add-obj-modal').style.display='none';}
+async function submitAddObj(){
+  const id=el('ao-id').value.trim(); if(!id){log('err','ID required');return;}
+  const obj={id,name:el('ao-name').value||id,type:el('ao-type').value,
+    affordances:el('ao-aff').value.split(',').map(s=>s.trim()).filter(Boolean),
+    moods:el('ao-moods').value.split(',').map(s=>s.trim()).filter(Boolean),
+    max_force_n:parseFloat(el('ao-force').value)||20,
+    pos:{x:0,y:0,z:0.4},contact_normal:[0,0,1],notes:el('ao-notes').value};
+  if(P.simMode){P.objects.push(obj);renderObjects();closeAddObj();log('ok','Added: '+id);}
+  else{
+    try{await apiFetch('/api/v1/objects',{method:'POST',body:JSON.stringify(obj)});
+      await loadObjects();closeAddObj();log('ok','Added: '+id);}
+    catch(e){log('err','Add failed: '+e.message);}
+  }
+}
+function exportObjs(){
+  const data={schema_version:'2.0.0',exported:new Date().toISOString(),objects:P.objects};
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
+  a.download='go2_objects_'+Date.now()+'.json'; a.click();
+  log('ok','Objects exported');
+}
+function importObjs(){el('obj-import-input').click();}
+function handleObjImport(e){
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{const d=JSON.parse(ev.target.result);const objs=Array.isArray(d)?d:(d.objects||[]);
+      P.objects=[...P.objects,...objs];renderObjects();log('ok','Imported '+objs.length+' objects');}
+    catch(err){log('err','Import failed: '+err.message);}
+  };
+  r.readAsText(f);
+}
+
+// ── Missions ──────────────────────────────────────────────────────────────
+async function loadMissions(){
+  try{const r=await apiFetch('/api/v1/missions');P.missions=r.missions||[];}
+  catch(e){P.missions=[{id:'1',name:'Home Patrol',type:'patrol',status:'pending',progress:0}];}
+  renderMissions();
+}
+function renderMissions(){
+  const list=el('mission-list'); if(!list) return;
+  const icons={patrol:'🗺️',follow:'👣',inspect:'🔍',sequence:'🎬'};
+  list.innerHTML=P.missions.map(m=>`
+    <div class="mission-card">
+      <div class="mi ${m.type}">${icons[m.type]||'📋'}</div>
+      <div class="mb"><div class="mn">${m.name}</div><div class="ms">${m.status} · ${m.type}</div>
+        <div class="mpbar"><div class="mpfill" style="width:${(m.progress||0)*100}%"></div></div>
+      </div>
+      ${m.status==='pending'?`<button class="btn btn-p" style="font-size:11px;padding:5px 10px" onclick="startMission('${m.id}')">Start</button>`:''}
+      ${m.status==='running'?`<button class="btn btn-d" style="font-size:11px;padding:5px 10px" onclick="stopMission()">Stop</button>`:''}
+    </div>`).join('');
+}
+async function createMission(){
+  const name=el('m-name').value||'New Mission';const type=el('m-type').value;
+  if(P.simMode){P.missions.push({id:Date.now()+'',name,type,status:'pending',progress:0});renderMissions();}
+  else{try{await apiFetch('/api/v1/missions',{method:'POST',body:JSON.stringify({name,type,params:{}})});await loadMissions();}catch(e){log('err',e.message);}}
+}
+async function startMission(id){
+  if(P.simMode){const m=P.missions.find(m=>m.id===id);if(m){m.status='running';renderMissions();}}
+  else{try{await apiFetch('/api/v1/missions/'+id+'/start',{method:'POST'});await loadMissions();}catch(e){log('err',e.message);}}
+}
+async function stopMission(){
+  if(P.simMode){P.missions.forEach(m=>{if(m.status==='running')m.status='paused'});renderMissions();}
+  else{try{await apiFetch('/api/v1/missions/stop',{method:'POST'});await loadMissions();}catch(e){}}
+}
+
+// ── Nodes ─────────────────────────────────────────────────────────────────
+function renderNodes(){
+  const list=el('nodes-list'); if(!list) return;
+  list.innerHTML=P.nodes.map(n=>`
+    <div class="node-row">
+      <span class="node-name">${n.name}</span>
+      <span class="nst ${n.st}">${n.st}</span>
+    </div>`).join('');
+}
+
+// ── Animation System ──────────────────────────────────────────────────────
+const NEUTRAL_POSE=[0,0.67,-1.3,0,0.67,-1.3,0,0.67,-1.3,0,0.67,-1.3];
+const ENGAGE_POSE=[0,0.80,-1.5,0,0.80,-1.5,0,0.40,-0.9,0,0.40,-0.9];
+const SIT_POSE=[0,0.67,-1.3,0,0.67,-1.3,0,1.60,-2.4,0,1.60,-2.4];
+
+// Built-in procedural animations
+function genBreathing(){
+  const kfs=[]; const steps=80;
+  for(let i=0;i<=steps;i++){
+    const t=i/steps, ph=2*Math.PI*t, off=0.02*Math.sin(ph);
+    kfs.push({t:i*50,j:NEUTRAL_POSE.map((v,k)=>k%3===1?v+off*0.5:k%3===2?v-off:v)});
+  }
+  return {id:'idle_breath',name:'Breathing',dur:4000,kfs,loop:true};
+}
+function genTailWag(){
+  const kfs=[]; const steps=60;
+  for(let i=0;i<=steps;i++){
+    const t=i/steps, ph=4*Math.PI*t;
+    const j=[...NEUTRAL_POSE]; j[9]=0.15*Math.sin(ph); j[6]=0.15*Math.sin(ph+Math.PI);
+    kfs.push({t:i*33,j});
+  }
+  return {id:'tail_wag',name:'Happy Wag',dur:2000,kfs,loop:false};
+}
+function genHeadTilt(){
+  const kfs=[]; const steps=45;
+  for(let i=0;i<=steps;i++){
+    const t=i/steps;
+    const tilt=t<0.2?t/0.2:t<0.7?1.0:(1-t)/0.3;
+    const ts=tilt*tilt*(3-2*tilt), off=0.12*ts;
+    const j=[...NEUTRAL_POSE]; j[3]=-off; j[9]=-off*0.5;
+    kfs.push({t:i*33,j});
+  }
+  return {id:'head_tilt',name:'Head Tilt',dur:1500,kfs,loop:false};
+}
+function genSitDown(){
+  const kfs=[]; const N=30;
+  for(let i=0;i<=N;i++){
+    const ts=i/N; const sm=ts*ts*(3-2*ts);
+    const j=NEUTRAL_POSE.map((v,k)=>v+(SIT_POSE[k]-v)*sm);
+    kfs.push({t:(1500/N)*i,j});
+  }
+  return {id:'sit_down',name:'Sit Down',dur:1500,kfs,loop:false};
+}
+
+P.anim.clips = {
+  idle_breath: genBreathing(),
+  tail_wag: genTailWag(),
+  head_tilt: genHeadTilt(),
+  sit_down: genSitDown(),
+};
+
+function sampleClip(clip, tMs){
+  if(clip.loop && clip.dur>0) tMs=tMs%clip.dur;
+  tMs=Math.max(clip.kfs[0].t, Math.min(clip.kfs[clip.kfs.length-1].t, tMs));
+  let lo=0,hi=clip.kfs.length-1;
+  while(lo<hi-1){const mid=Math.floor((lo+hi)/2); clip.kfs[mid].t<=tMs?lo=mid:hi=mid;}
+  if(clip.kfs[lo].t===clip.kfs[hi].t) return clip.kfs[lo].j;
+  const t=(tMs-clip.kfs[lo].t)/(clip.kfs[hi].t-clip.kfs[lo].t);
+  const ts=t*t*(3-2*t); // smoothstep
+  return clip.kfs[lo].j.map((a,i)=>a+(clip.kfs[hi].j[i]-a)*ts);
+}
+
+let animStartT=0, animPauseElapsed=0;
+function getAnimElapsed(){
+  if(!P.anim.playing) return animPauseElapsed;
+  return animPauseElapsed + (Date.now()-animStartT)*P.anim.speed;
+}
+
+function loadBuiltinAnim(id){
+  const clip=P.anim.clips[id]; if(!clip) return;
+  P.anim.current=clip;
+  P.anim.playing=false; animPauseElapsed=0;
+  el('anim-clip-name').textContent=clip.name;
+  el('anim-time').textContent='0.0s / '+(clip.dur/1000).toFixed(1)+'s';
+  el('anim-head').style.width='0%';
+  log('ok','Loaded: '+clip.name);
+  renderAnimClipList();
+}
+
+function animPlay(){
+  if(!P.anim.current){log('warn','No animation loaded');return;}
+  if(P.anim.playing) return;
+  animStartT=Date.now(); P.anim.playing=true;
+  el('anim-play-btn').innerHTML='⏸ Playing';
+  log('ok','Animation playing: '+P.anim.current.name);
+  if(P.connected) apiFetch('/api/v1/animations/'+P.anim.current.id+'/play',{method:'POST',body:JSON.stringify({speed:P.anim.speed})}).catch(()=>{});
+}
+function animPause(){
+  if(!P.anim.playing) return;
+  animPauseElapsed=getAnimElapsed(); P.anim.playing=false;
+  el('anim-play-btn').innerHTML='▶ Play';
+}
+function animStop(){
+  P.anim.playing=false; animPauseElapsed=0;
+  el('anim-play-btn').innerHTML='▶ Play';
+  el('anim-head').style.width='0%';
+  el('anim-time').textContent='0.0s / '+(P.anim.current?(P.anim.current.dur/1000).toFixed(1):'0.0')+'s';
+}
+function animSpeed(v){P.anim.speed=v;el('anim-speed-val').textContent=v+'×';}
+function animToggleLoop(v){if(P.anim.current) P.anim.current.loop=v;}
+function seekAnim(ev){
+  if(!P.anim.current) return;
+  const tl=el('anim-tl'); const rect=tl.getBoundingClientRect();
+  const t=Math.max(0,Math.min(1,(ev.clientX-rect.left)/rect.width));
+  animPauseElapsed=t*P.anim.current.dur;
+  el('anim-head').style.width=(t*100)+'%';
+}
+function loadAnimFormat(fmt){
+  el('anim-file-input').dataset.fmt=fmt;
+  el('anim-file-input').click();
+}
+async function handleAnimFile(e){
+  const f=e.target.files[0]; if(!f) return;
+  const fmt=e.target.dataset.fmt||'json';
+  const text=await f.text();
+  if(P.connected){
+    try{
+      const r=await apiFetch('/api/v1/animations/load',{method:'POST',body:JSON.stringify({content:text,format:fmt,name:f.name.replace(/\.[^.]+$/,'')})});
+      log('ok','Uploaded: '+r.id);
+    }catch(err){log('err','Upload failed: '+err.message);}
+  } else {
+    try{
+      let data=fmt==='funscript'||fmt==='json'?JSON.parse(text):text;
+      // Simple browser-side parse
+      if(fmt==='funscript'&&data.actions){
+        const acts=data.actions; const dur=acts[acts.length-1].at;
+        const kfs=acts.map(a=>({t:a.at,j:NEUTRAL_POSE.map((v,k)=>v+(ENGAGE_POSE[k]-v)*(a.pos/100))}));
+        const clip={id:'loaded',name:f.name.replace(/\.[^.]+$/,''),dur,kfs,loop:false};
+        P.anim.clips.loaded=clip; loadBuiltinAnim('loaded');
+      } else { log('warn','Browser parsing limited. Connect to backend for full format support.'); }
+    }catch(err){log('err','Parse failed: '+err.message);}
+  }
+}
+function renderAnimClipList(){
+  const list=el('anim-clips-list'); if(!list) return;
+  const clips=Object.values(P.anim.clips);
+  if(!clips.length){list.innerHTML='';return;}
+  list.innerHTML=`<div class="card"><div class="ctitle"><span class="ci">🎞</span>Loaded Clips (${clips.length})</div>${clips.map(c=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--cream)">
+      <div>
+        <div style="font-size:12px;font-weight:500;color:var(--ink)">${c.name}</div>
+        <div style="font-size:10px;color:var(--ink3)">${c.kfs.length} kf · ${(c.dur/1000).toFixed(1)}s${c.loop?' · loop':''}</div>
+      </div>
+      <div style="display:flex;gap:5px">
+        <button class="btn btn-ghost" style="padding:4px 9px;font-size:11px" onclick="loadBuiltinAnim('${c.id}')">Load</button>
+      </div>
+    </div>`).join('')}</div>`;
+}
+function exportAnim(fmt){
+  if(!P.anim.current){log('warn','No animation loaded');return;}
+  const c=P.anim.current;
+  let data,ext;
+  if(fmt==='funscript'){
+    data={version:'1.0',range:90,actions:c.kfs.map(kf=>({at:Math.round(kf.t),pos:Math.round((kf.j[8]-NEUTRAL_POSE[8])/(ENGAGE_POSE[8]-NEUTRAL_POSE[8])*100)}))};
+    ext='funscript';
+  } else {
+    data={name:c.name,loop:c.loop,keyframes:c.kfs.map(kf=>({time_ms:Math.round(kf.t),joints:kf.j.map(v=>Math.round(v*1000)/1000)}))};
+    ext='json';
+  }
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
+  a.download=c.name+'_'+Date.now()+'.'+ext; a.click();
+  log('ok','Exported as '+ext);
+}
+
+// ── Behavior Tree Visualizer ──────────────────────────────────────────────
+const BT_NODES = [
+  {id:'root',label:'Selector\nroot',type:'sel',x:0.5,y:0.05,children:['emerg','mission','comp','idle']},
+  {id:'emerg',label:'Selector\nemergency',type:'sel',x:0.15,y:0.28,children:['estop_seq','avoid_seq','bat_seq']},
+  {id:'mission',label:'Sequence\nmission',type:'seq',x:0.38,y:0.28,children:['armed_c','bat_ok_c','has_m_c','run_m']},
+  {id:'comp',label:'Sequence\ncompanion',type:'seq',x:0.65,y:0.28,children:['armed_c2','human_c','follow_a']},
+  {id:'idle',label:'Sequence\nidle',type:'seq',x:0.87,y:0.28,children:['idle_c','cooldown']},
+  {id:'estop_seq',label:'Seq\nestop',type:'seq',x:0.05,y:0.55,children:['tilt_c','estop_a']},
+  {id:'avoid_seq',label:'Seq\navoid',type:'seq',x:0.15,y:0.55,children:['obs_c','avoid_a']},
+  {id:'bat_seq',label:'Seq\nbattery',type:'seq',x:0.25,y:0.55,children:['batcrit_c','sit_a']},
+  {id:'armed_c',label:'armed?',type:'cond',x:0.32,y:0.55},
+  {id:'bat_ok_c',label:'battery\nok?',type:'cond',x:0.38,y:0.55},
+  {id:'has_m_c',label:'has\nmission?',type:'cond',x:0.44,y:0.55},
+  {id:'run_m',label:'run\nmission',type:'act',x:0.50,y:0.55},
+  {id:'armed_c2',label:'armed?',type:'cond',x:0.60,y:0.55},
+  {id:'human_c',label:'human\nvisible?',type:'cond',x:0.67,y:0.55},
+  {id:'follow_a',label:'follow',type:'act',x:0.74,y:0.55},
+  {id:'idle_c',label:'idle?',type:'cond',x:0.84,y:0.55},
+  {id:'cooldown',label:'cooldown\n5s',type:'dec',x:0.91,y:0.55},
+  {id:'tilt_c',label:'tilted?',type:'cond',x:0.02,y:0.82},
+  {id:'estop_a',label:'E-STOP',type:'act',x:0.09,y:0.82},
+  {id:'obs_c',label:'obstacle\nclose?',type:'cond',x:0.13,y:0.82},
+  {id:'avoid_a',label:'stop',type:'act',x:0.19,y:0.82},
+  {id:'batcrit_c',label:'batt\ncrit?',type:'cond',x:0.23,y:0.82},
+  {id:'sit_a',label:'sit',type:'act',x:0.29,y:0.82},
+];
+const BT_STATUS = {};
+const BT_COLORS = {seq:'var(--sky)',sel:'var(--lav)',cond:'var(--leaf)',act:'var(--amber)',dec:'var(--peach)'};
+let btAnimFrame=0;
+
+function drawBT(){
+  const c=el('btcanv'); if(!c) return;
+  const ctx=c.getContext('2d'); const W=c.offsetWidth||800,H=280;
+  c.width=W; c.height=H;
+  ctx.clearRect(0,0,W,H);
+  // BG
+  ctx.fillStyle='#faf8f4'; ctx.fillRect(0,0,W,H);
+
+  const nodeMap={};
+  BT_NODES.forEach(n=>nodeMap[n.id]={...n,px:n.x*W,py:n.y*H+30});
+
+  // Edges
+  ctx.lineWidth=1.5;
+  BT_NODES.forEach(n=>{
+    if(!n.children) return;
+    const par=nodeMap[n.id];
+    n.children.forEach(cid=>{
+      const ch=nodeMap[cid]; if(!ch) return;
+      const st=BT_STATUS[cid]||'idle';
+      ctx.strokeStyle=st==='SUCCESS'?'rgba(76,175,125,.6)':st==='FAILURE'?'rgba(224,90,90,.6)':st==='RUNNING'?'rgba(232,145,58,.6)':'rgba(200,191,176,.5)';
+      ctx.beginPath(); ctx.moveTo(par.px,par.py+16); ctx.lineTo(ch.px,ch.py-16); ctx.stroke();
+    });
+  });
+
+  // Nodes
+  BT_NODES.forEach(n=>{
+    const {px,py}=nodeMap[n.id];
+    const st=BT_STATUS[n.id]||'idle';
+    const bg=st==='SUCCESS'?'#e8f7ef':st==='FAILURE'?'#fdeaea':st==='RUNNING'?'#fdf2e8':'#f2ede4';
+    const border=st==='SUCCESS'?'#4caf7d':st==='FAILURE'?'#e05a5a':st==='RUNNING'?'#e8913a':BT_COLORS[n.type]||'#e8dfd0';
+    const r=n.type==='cond'||n.type==='act'?8:10;
+    ctx.fillStyle=bg; ctx.strokeStyle=border; ctx.lineWidth=1.5;
+    roundRectCtx(ctx,px-36,py-14,72,28,r); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#2d2620'; ctx.font='700 8.5px DM Sans,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    const lines=(n.label||n.id).split('\n');
+    if(lines.length===1){ctx.fillText(n.label,px,py);}
+    else{lines.forEach((l,i)=>ctx.fillText(l,px,py+(i-0.4)*9));}
+  });
+}
+function roundRectCtx(ctx,x,y,w,h,r){
+  ctx.beginPath(); ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r); ctx.lineTo(x+r,y+h);
+  ctx.arcTo(x,y+h,x,y+h-r,r); ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
+}
+function simulateBTStatus(){
+  const armed=P.armed; const bat=P.telemetry.battery_pct||87;
+  const pitch=Math.abs(P.telemetry.pitch_deg||0);
+  BT_STATUS.root=P.state!=='idle'&&P.state!=='standing'?'SUCCESS':'RUNNING';
+  BT_STATUS.emerg=pitch>8?'RUNNING':'FAILURE';
+  BT_STATUS.mission=!P.missions.find(m=>m.status==='running')?'FAILURE':'RUNNING';
+  BT_STATUS.comp=P.state==='following'?'SUCCESS':'FAILURE';
+  BT_STATUS.idle=P.state==='idle'||P.state==='standing'?'RUNNING':'FAILURE';
+  BT_STATUS.armed_c=armed?'SUCCESS':'FAILURE';
+  BT_STATUS.armed_c2=armed?'SUCCESS':'FAILURE';
+  BT_STATUS.bat_ok_c=bat>15?'SUCCESS':'FAILURE';
+  BT_STATUS.tilt_c=pitch>8?'SUCCESS':'FAILURE';
+  BT_STATUS.batcrit_c=bat<10?'SUCCESS':'FAILURE';
+  BT_STATUS.human_c=P.state==='following'?'SUCCESS':'FAILURE';
+  BT_STATUS.follow_a=P.state==='following'?'RUNNING':'idle';
+  const t=Date.now()/1000;
+  BT_STATUS.idle_c=P.state==='idle'||P.state==='standing'?'SUCCESS':'FAILURE';
+  drawBT();
+  // Blackboard
+  renderBB();
+}
+function renderBB(){
+  const list=el('bb-list'); if(!list) return;
+  const bb={
+    'robot.armed':P.armed,'robot.state':P.state,
+    'robot.battery_pct':Math.round(P.telemetry.battery_pct||0),
+    'robot.pitch_deg':Math.round((P.telemetry.pitch_deg||0)*10)/10,
+    'robot.roll_deg':Math.round((P.telemetry.roll_deg||0)*10)/10,
+    'perception.human_dist':'~2.0','perception.obstacle_dist':'~3.5',
+    'mission.active':P.missions.find(m=>m.status==='running')?.id||'none',
+  };
+  list.innerHTML=Object.entries(bb).map(([k,v])=>`
+    <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--cream)">
+      <span style="color:var(--ink3)">${k}</span>
+      <span style="font-weight:500;color:var(--ink)">${v}</span>
+    </div>`).join('');
+}
+async function btCmd(action){
+  if(P.connected){
+    try{await apiFetch('/api/v1/bt/'+action,{method:'POST'});
+      const s=await apiFetch('/api/v1/bt/status');
+      el('bt-status').textContent='Status: '+s.last_status+' · ticks: '+s.ticks;}
+    catch(e){log('err','BT: '+e.message);}
+  } else {
+    el('bt-status').textContent='Status: '+action+' (simulation)';
+    log('ok','BT '+action+' (sim mode)');
+  }
+}
+
+// ── Metrics ───────────────────────────────────────────────────────────────
+const _startTime=Date.now();
+let _cmdCount=0,_estopCount=0,_tripCount=0;
+
+async function loadMetrics(){
+  if(P.connected){
+    try{
+      const m=await apiFetch('/api/v1/metrics/json');
+      el('m-uptime').textContent=fmtDur(m.uptime_s||0);
+      el('m-cmds').textContent=Math.round(m.commands||0);
+      setMVal('m-estops',m.estops||0,1,0,v=>v);
+      setMVal('m-trips',m.safety_trips||0,1,0,v=>v);
+      setMVal('m-battery',m.battery_pct||0,30,15,v=>v.toFixed(0)+'%');
+      setMVal('m-latency',m.cmd_p95_ms||0,50,100,v=>v.toFixed(1)+'ms');
+      const h=await apiFetch('/api/v1/health');
+      renderHealth(h.checks||[]);
+    } catch(e){}
+  } else {
+    // Simulate
+    const uptime=(Date.now()-_startTime)/1000;
+    el('m-uptime').textContent=fmtDur(uptime);
+    el('m-cmds').textContent=_cmdCount;
+    setMVal('m-estops',_estopCount,1,0,v=>v);
+    setMVal('m-trips',_tripCount,1,0,v=>v);
+    setMVal('m-battery',P.telemetry.battery_pct||87,30,15,v=>v.toFixed(0)+'%');
+    setMVal('m-latency',2.3,50,100,v=>v+'ms');
+    renderHealth([
+      {name:'safety',status:'ok',message:'level=normal'},
+      {name:'battery',status:(P.telemetry.battery_pct||87)>25?'ok':'degraded',message:(P.telemetry.battery_pct||87).toFixed(0)+'%'},
+      {name:'telemetry',status:'ok',message:'fresh'},
+      {name:'memory',status:'ok',message:'~45MB'},
+    ]);
+  }
+}
+function setMVal(id,v,warnAt,errAt,fmt){
+  const e2=el(id); if(!e2) return;
+  e2.textContent=typeof fmt==='function'?fmt(v):v;
+  e2.className='mval '+(v>=errAt&&errAt>0?'err':v>=warnAt&&warnAt>0?'warn':'ok');
+}
+function fmtDur(s){if(s<60)return Math.round(s)+'s';if(s<3600)return Math.floor(s/60)+'m '+Math.round(s%60)+'s';return Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m';}
+function renderHealth(checks){
+  const list=el('health-list'); if(!list) return;
+  list.innerHTML=checks.map(c=>{
+    const icon=c.status==='ok'?'✅':c.status==='degraded'?'⚠️':'❌';
+    return `<div class="node-row"><span class="node-name">${icon} ${c.name}</span><span style="font-size:11px;color:var(--ink3)">${c.message||c.status}</span></div>`;
+  }).join('');
+}
+async function fetchProm(){
+  const pb=el('prom-box'); if(!pb) return;
+  if(P.connected){
+    try{const r=await fetch(P.apiBase+'/api/v1/metrics');pb.textContent=await r.text();}
+    catch(e){pb.textContent='// Error: '+e.message;}
+  } else {
+    pb.textContent=`# Go2 Platform Metrics (simulated)\ngo2_uptime_s ${((Date.now()-_startTime)/1000).toFixed(1)}\ngo2_battery_pct ${(P.telemetry.battery_pct||87).toFixed(1)}\ngo2_commands_total ${_cmdCount}\ngo2_estop_total ${_estopCount}\ngo2_safety_trips_total ${_tripCount}\n`;
+  }
+}
+
+// ── Robot wireframe ───────────────────────────────────────────────────────
+function drawRobot(t){
+  const c=el('rcanv'); if(!c) return;
+  const ctx=c.getContext('2d'); const W=c.offsetWidth||800,H=220;
+  c.width=W; c.height=H;
+  ctx.clearRect(0,0,W,H);
+  const g=ctx.createLinearGradient(0,0,W,H); g.addColorStop(0,'#faf8f4'); g.addColorStop(1,'#f2ede4');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(200,191,176,.35)';
+  for(let x=0;x<W;x+=24) for(let y=0;y<H;y+=24){ctx.beginPath();ctx.arc(x,y,1.5,0,Math.PI*2);ctx.fill();}
+
+  const cx=W/2,cy=H/2+10,roll=(t?.roll_deg||0)*Math.PI/180,pitch=(t?.pitch_deg||0)*Math.PI/180;
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(roll*0.4);
+  const pO=pitch*30;
+
+  // Shadow
+  ctx.save(); ctx.translate(0,88); ctx.scale(1,0.3);
+  const sg=ctx.createRadialGradient(0,0,15,0,0,110); sg.addColorStop(0,'rgba(150,120,80,.14)'); sg.addColorStop(1,'rgba(150,120,80,0)');
+  ctx.fillStyle=sg; ctx.beginPath(); ctx.arc(0,0,110,0,Math.PI*2); ctx.fill(); ctx.restore();
+
+  // Body
+  ctx.fillStyle='#fff'; ctx.strokeStyle='#e8dfd0'; ctx.lineWidth=2;
+  const bW=128,bH=54;
+  roundRectCtx(ctx,-bW/2,-bH/2+pO,bW,bH,13); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle='rgba(200,191,176,.5)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(-bW/2+20,pO); ctx.lineTo(bW/2-20,pO); ctx.stroke();
+
+  // Camera eye
+  ctx.fillStyle='#4a9fd4'; ctx.beginPath(); ctx.ellipse(bW/2+13,-bH/2+pO+11,6,6,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(bW/2+15,-bH/2+pO+9,2,0,Math.PI*2); ctx.fill();
+
+  // Head bump
+  ctx.fillStyle='#faf8f4'; ctx.strokeStyle='#e8dfd0'; ctx.lineWidth=2;
+  roundRectCtx(ctx,bW/2,-bH/2+pO,27,37,7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#e8913a'; ctx.beginPath(); ctx.ellipse(bW/2+21,bH/2+pO-7,5,4,0,0,Math.PI*2); ctx.fill();
+
+  // Legs
+  const active=['performing','interacting','walking','following','navigating'].includes(P.state);
+  const phase=Date.now()/500;
+  const legs=[
+    {x:-bW/2+22,y:-bH/2+pO+6,k:'fl',label:'FL',rear:false},
+    {x:bW/2-22,y:-bH/2+pO+6,k:'fr',label:'FR',rear:false},
+    {x:-bW/2+22,y:bH/2+pO-6,k:'rl',label:'RL',rear:true},
+    {x:bW/2-22,y:bH/2+pO-6,k:'rr',label:'RR',rear:true},
+  ];
+  const ff=t?.foot_forces||{fl:13,fr:12,rl:14,rr:13};
+  const mt=t?.motor_temps||{fl:42,fr:43,rl:41,rr:42};
+  legs.forEach((leg,i)=>{
+    const swing=active?(leg.rear?0.08:0.04)*Math.sin(phase+(i%2)*Math.PI):0;
+    const tc=mt[leg.k]>72?'#e05a5a':mt[leg.k]>58?'#e8913a':'#4caf7d';
+    const ky1=leg.y, ky2=leg.y+(leg.rear?29:27)+swing*14, ky3=ky2+21;
+    ctx.fillStyle='#e8dfd0'; ctx.beginPath(); ctx.arc(leg.x,ky1,5,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#e8dfd0'; ctx.lineWidth=6; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(leg.x,ky1); ctx.lineTo(leg.x+swing*20,ky2); ctx.stroke();
+    ctx.fillStyle='#d8cfc0'; ctx.beginPath(); ctx.arc(leg.x+swing*20,ky2,4,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#d8cfc0'; ctx.lineWidth=5;
+    ctx.beginPath(); ctx.moveTo(leg.x+swing*20,ky2); ctx.lineTo(leg.x+swing*10,ky3); ctx.stroke();
+    ctx.fillStyle=tc; ctx.beginPath(); ctx.arc(leg.x+swing*10,ky3,5,0,Math.PI*2); ctx.fill();
+    // Force ring
+    const fv=(ff[leg.k]||12)/35;
+    ctx.strokeStyle=tc+'88'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(leg.x+swing*10,ky3,7+fv*4,0,Math.PI*2); ctx.stroke();
+    // Label
+    ctx.fillStyle='rgba(107,95,84,.5)'; ctx.font='8px DM Sans,sans-serif'; ctx.textAlign='center';
+    ctx.fillText(leg.label,leg.x,ky1-9);
+  });
+
+  // COM
+  const comX=(t?.com_x||0)*300;
+  ctx.strokeStyle='rgba(232,145,58,.6)'; ctx.lineWidth=1.5; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(comX,pO-48); ctx.lineTo(comX,pO+48); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Detections overlay
+  if(P.detections&&P.detections.length>0){
+    const det=el('vc-detect'); if(det){det.style.display='flex';el('vc-detect-txt').textContent=P.detections.length+' detected';}
+    P.detections.slice(0,3).forEach(d=>{
+      // Draw simple indicator near top-right
+      const bx=bW*0.5*(1+0.5*Math.cos(d.angle||0));
+      const by=-bH*0.3; const dist=d.dist_m||2;
+      ctx.strokeStyle=dist<0.5?'rgba(224,90,90,.8)':'rgba(74,159,212,.6)'; ctx.lineWidth=1.5; ctx.setLineDash([2,3]);
+      ctx.beginPath(); ctx.arc(0,0,dist*80,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+    });
+  }
+
+  ctx.restore();
+  // State label
+  ctx.fillStyle='rgba(107,95,84,.55)'; ctx.font='11px DM Sans,sans-serif'; ctx.textAlign='left';
+  ctx.fillText('UNITREE GO2 — '+P.state.toUpperCase(), 14, H-11);
+  if(P.armed){ctx.fillStyle='rgba(76,175,125,.8)'; ctx.textAlign='right'; ctx.fillText('● ARMED', W-14, H-11);}
+
+  // Animation joint overlay when playing
+  if(P.anim.playing && P.anim.current){
+    const elapsed=getAnimElapsed();
+    const joints=sampleClip(P.anim.current,elapsed);
+    // Visualize joint angles as small arcs on the robot silhouette
+    ctx.save(); ctx.translate(cx,cy);
+    const hipColors=['#4a9fd4','#4a9fd4','#4a9fd4','#4a9fd4'];
+    [0,1,2,3].forEach(li=>{
+      const hipAngle=joints[li*3+1]-0.67;
+      const leg=legs[li];
+      if(Math.abs(hipAngle)>0.05){
+        ctx.strokeStyle=hipColors[li]+'88'; ctx.lineWidth=2; ctx.setLineDash([2,3]);
+        ctx.beginPath();
+        ctx.arc(leg.x,leg.y+bH/2+pO,15,-(Math.PI/2),-(Math.PI/2)+hipAngle);
+        ctx.stroke(); ctx.setLineDash([]);
+      }
+    });
+    ctx.restore();
+  }
+}
+
+// ── Animation canvas visualizer ────────────────────────────────────────────
+function drawAnimCanvas(){
+  const c=el('acanv'); if(!c) return;
+  const ctx=c.getContext('2d'); const W=c.offsetWidth||800,H=120;
+  c.width=W; c.height=H;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#faf8f4'; ctx.fillRect(0,0,W,H);
+
+  if(!P.anim.current){
+    ctx.fillStyle='var(--ink3)'; ctx.font='13px DM Sans,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('No animation loaded — select a clip below', W/2, H/2);
+    return;
+  }
+
+  const clip=P.anim.current;
+  const elapsed=P.anim.playing?getAnimElapsed():animPauseElapsed;
+  const duration=clip.dur;
+
+  // Draw joint curves for each of 12 joints
+  const colors=['#4a9fd4','#4caf7d','#e8913a','#9b7fe8','#e05a5a','#f09060'];
+  const N_JOINTS=12;
+  const yCenter=H/2, yScale=(H-20)/6;
+
+  // Axis lines
+  ctx.strokeStyle='rgba(200,191,176,.4)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,yCenter); ctx.lineTo(W,yCenter); ctx.stroke();
+
+  // Plot a subset of joints (0=FR_0, 1=FR_1(hip), 2=FR_2(knee), 10=RL_1, 11=RL_2)
+  const SHOW=[0,1,2,9,10,11]; // 6 representative joints
+  SHOW.forEach((ji,ci)=>{
+    const col=colors[ci%colors.length];
+    ctx.strokeStyle=col+'aa'; ctx.lineWidth=1.5;
+    ctx.beginPath();
+    const steps=Math.min(200,clip.kfs.length*3);
+    for(let s=0;s<=steps;s++){
+      const t=(s/steps)*duration;
+      const j=sampleClip(clip,t);
+      const val=j[ji];
+      const neutral=NEUTRAL_POSE[ji];
+      const x=(s/steps)*W;
+      const y=yCenter - (val-neutral)*yScale*3;
+      s===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  });
+
+  // Playhead
+  if(duration>0){
+    const px=(Math.min(elapsed,duration)/duration)*W;
+    ctx.strokeStyle='var(--amber)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(px,0); ctx.lineTo(px,H); ctx.stroke();
+    ctx.fillStyle='var(--amber)'; ctx.beginPath(); ctx.arc(px,10,4,0,Math.PI*2); ctx.fill();
+    // Update timeline
+    el('anim-head').style.width=(px/W*100)+'%';
+    el('anim-time').textContent=(elapsed/1000).toFixed(1)+'s / '+(duration/1000).toFixed(1)+'s';
+  }
+
+  // Legend
+  ctx.font='9px DM Sans,sans-serif'; ctx.textAlign='left';
+  ['FR_0','FR_1','FR_2','RL_0','RL_1','RL_2'].forEach((name,i)=>{
+    ctx.fillStyle=colors[i]; ctx.fillRect(8+i*70,H-14,10,8);
+    ctx.fillStyle='var(--ink3)'; ctx.fillText(name,22+i*70,H-7);
+  });
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────
+function connectWS(){
+  try{
+    P.ws=new WebSocket(P.apiBase.replace('http','ws')+'/ws');
+    P.ws.onopen=()=>{
+      P.connected=true; setConn('ok','Connected');
+      el('sim-banner').classList.add('hidden');
+      fetchInitialState();
+      log('ok','WebSocket connected');
+    };
+    P.ws.onmessage=(e)=>{
+      try{handleWsMsg(JSON.parse(e.data));}catch(_){}
+    };
+    P.ws.onclose=()=>{
+      P.connected=false; setConn('off','Disconnected');
+      log('warn','WS disconnected — retrying in 4s');
+      setTimeout(tryOrSim,4000);
+    };
+    P.ws.onerror=()=>tryOrSim();
+  } catch(e){tryOrSim();}
+}
+function tryOrSim(){
+  P.connected=false; P.simMode=true;
+  setConn('warn','Simulation');
+  el('sim-banner').classList.remove('hidden');
+  loadBuiltinBehaviors(); renderBehaviors();
+  log('info','Running in browser simulation');
+}
+function setConn(cls,txt){
+  const d=el('conn-dot'); d.className='dot '+cls;
+  el('conn-txt').textContent=txt;
+}
+function handleWsMsg(msg){
+  const {type,data}=msg;
+  if(type==='init'){if(data.fsm)applyFSM(data.fsm);if(data.telemetry)applyTelemetry(data.telemetry);}
+  else if(type==='telemetry')applyTelemetry(data);
+  else if(type==='fsm')applyFSM(data);
+  else if(type==='estop'){P.estop=true;el('estop-btn').textContent='✅ Reset';el('estop-btn').classList.add('fired');}
+  else if(type==='detections'){P.detections=data.detections||[];const d=el('vc-detect');if(d){d.style.display=P.detections.length?'flex':'none';}}
+}
+async function fetchInitialState(){
+  try{const s=await apiFetch('/api/v1/status');if(s.fsm)applyFSM(s.fsm);if(s.telemetry)applyTelemetry(s.telemetry);}catch(e){}
+  await loadBehaviors();
+  await loadObjects();
+  await loadMissions();
+  await loadI18n(P.locale);
+}
+function reconnect(){
+  P.apiBase=el('api-url').value;
+  if(P.ws){P.ws.close();}
+  connectWS();
+}
+
+// ── Safety config ─────────────────────────────────────────────────────────
+async function updateThresh(type,val){
+  const labels={pitch:'th-pitch',roll:'th-roll',force:'th-force'};
+  const fmt={pitch:v=>v+'°',roll:v=>v+'°',force:v=>v+'N'};
+  const e2=el(labels[type]); if(e2) e2.textContent=fmt[type](val);
+  if(P.connected){
+    const m={pitch:'pitch_limit_deg',roll:'roll_limit_deg',force:'force_limit_n'};
+    try{await apiFetch('/api/v1/safety/config',{method:'PATCH',body:JSON.stringify({[m[type]]:val})});}catch(e){}
+  }
+  log('warn','Safety '+type+' → '+fmt[type](val));
+}
+
+// ── AI generator ──────────────────────────────────────────────────────────
+async function genAI(){
+  const key=el('ai-key').value.trim();
+  if(!key.startsWith('sk-')){el('ai-out').textContent='// Provide a valid Anthropic key';return;}
+  const mood=el('ai-mood').value, obj=el('ai-obj').value;
+  el('ai-btn').textContent='⏳ Generating…';
+  el('ai-out').textContent='// Asking Claude for motion parameters…';
+  const prompt=`Generate motion parameters for a Unitree Go2 robot: "${mood}" interaction with "${obj}". Return ONLY raw JSON (no markdown): {"rhythm_hz":float,"amplitude_m":float,"burst_duration_s":float,"jitter":float,"reasoning":"one sentence"} Constraint: amplitude_m ≤ 0.08`;
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,messages:[{role:'user',content:prompt}]})});
+    const d=await r.json(); const txt=d.content?.[0]?.text||'';
+    let p; try{p=JSON.parse(txt);}catch{const m=txt.match(/\{[\s\S]*\}/);if(m)p=JSON.parse(m[0]);else throw new Error('parse failed');}
+    el('ai-out').textContent=JSON.stringify(p,null,2);
+    log('ok','AI params: rhythm='+p.rhythm_hz+'Hz amp='+p.amplitude_m+'m');
+  }catch(e){el('ai-out').textContent='// Error: '+e.message;log('err','AI: '+e.message);}
+  finally{el('ai-btn').textContent='✨ Generate Behavior';}
+}
+
+// ── Tab navigation ────────────────────────────────────────────────────────
+function goTab(name,navEl){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav').forEach(n=>n.classList.remove('active'));
+  const page=el('tab-'+name); if(page) page.classList.add('active');
+  if(navEl) navEl.classList.add('active');
+  if(name==='tricks') renderBehaviors();
+  if(name==='objects') renderObjects();
+  if(name==='missions') renderMissions();
+  if(name==='settings'){renderLangGrid();}
+  if(name==='metrics') loadMetrics();
+  if(name==='bt') drawBT();
+  if(name==='anim') renderAnimClipList();
+}
+function rpTab(name,tabEl){
+  document.querySelectorAll('.rptab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.rpsec').forEach(s=>s.classList.remove('active'));
+  if(tabEl) tabEl.classList.add('active');
+  const sec=el('rps-'+name); if(sec) sec.classList.add('active');
+}
+function openMin(){el('minover').classList.add('open');}
+function closeMin(){el('minover').classList.remove('open');}
+function setTheme(v){log('info','Theme: '+v);}
+
+// ── Joystick ──────────────────────────────────────────────────────────────
+(function(){
+  let jsActive=false, jsStartX=0, jsStartY=0;
+  document.addEventListener('DOMContentLoaded',()=>{
+    const base=el('js-base'), knob=el('js-knob'); if(!base||!knob) return;
+    const pos=(e)=>{const t=e.touches?.[0]||e,r=base.getBoundingClientRect();return{x:t.clientX-r.left-r.width/2,y:t.clientY-r.top-r.height/2};};
+    base.addEventListener('mousedown',(e)=>{jsActive=true;knob.classList.add('active');e.preventDefault()});
+    base.addEventListener('touchstart',(e)=>{jsActive=true;knob.classList.add('active');e.preventDefault()},{passive:false});
+    document.addEventListener('mousemove',(e)=>{
+      if(!jsActive) return;
+      const {x,y}=pos(e); const lim=52,d=Math.min(lim,Math.sqrt(x*x+y*y)),a=Math.atan2(y,x);
+      const nx=Math.cos(a)*d,ny=Math.sin(a)*d;
+      knob.style.left=(50+nx/lim*38)+'%'; knob.style.top=(50+ny/lim*38)+'%';
+      el('js-vals').textContent='x: '+(nx/lim).toFixed(2)+'  y: '+(ny/lim).toFixed(2);
+    });
+    document.addEventListener('touchmove',(e)=>{
+      if(!jsActive) return; e.preventDefault();
+      const {x,y}=pos(e); const lim=52,d=Math.min(lim,Math.sqrt(x*x+y*y)),a=Math.atan2(y,x);
+      const nx=Math.cos(a)*d,ny=Math.sin(a)*d;
+      knob.style.left=(50+nx/lim*38)+'%'; knob.style.top=(50+ny/lim*38)+'%';
+      el('js-vals').textContent='x: '+(nx/lim).toFixed(2)+'  y: '+(ny/lim).toFixed(2);
+    },{passive:false});
+    const stop=()=>{jsActive=false;knob.classList.remove('active');knob.style.left='50%';knob.style.top='50%';el('js-vals').textContent='x: 0.00  y: 0.00';};
+    document.addEventListener('mouseup',stop); document.addEventListener('touchend',stop);
+  });
+})();
+
+// ── Simulation loop ───────────────────────────────────────────────────────
+let _simT0=Date.now(),_simFrame=0;
+function simLoop(){
+  _simFrame++;
+  const t=(Date.now()-_simT0)/1000;
+  const active=['performing','interacting','walking','following','navigating','patrolling'].includes(P.state);
+  const n=(f,a,b)=>a+(Math.sin(t*f+Math.cos(t*0.7)*0.3)*0.5+0.5)*(b-a);
+  const tel={
+    battery_pct:Math.max(5,87-t*0.003),voltage:29.4,
+    pitch_deg:(Math.sin(t*1.7))*(active?2.5:0.5),
+    roll_deg:(Math.sin(t*2.3))*(active?1.2:0.3),
+    yaw_deg:(t*8)%360,
+    contact_force_n:active?Math.max(0,Math.sin(t*3.2)*10+5):0,
+    com_x:Math.sin(t*0.7)*0.03,
+    foot_forces:{fl:n(2.1,10,18),fr:n(1.7,10,18),rl:n(2.5,10,18),rr:n(2.9,10,18)},
+    motor_temps:{fl:n(0.3,40,44),fr:n(0.5,41,45),rl:n(0.4,40,44),rr:n(0.6,41,45)},
+  };
+  applyTelemetry(tel);
+  renderNodes();
+
+  // Animate animation canvas
+  if(P.anim.playing&&P.anim.current){
+    const elapsed=getAnimElapsed();
+    if(elapsed>=P.anim.current.dur){
+      if(P.anim.current.loop){animPauseElapsed=0;animStartT=Date.now();}
+      else{animStop();log('ok','Animation complete: '+P.anim.current.name);}
+    }
+  }
+  drawAnimCanvas();
+
+  // BT visualizer every 300ms
+  if(_simFrame%15===0) simulateBTStatus();
+
+  // Metrics every 5s
+  if(_simFrame%250===0) loadMetrics();
+
+  // Random node health variation
+  if(Math.random()<0.003){
+    const n2=P.nodes[Math.floor(Math.random()*P.nodes.length)];
+    if(n2.id!=='safety'){n2.st='warn';setTimeout(()=>{n2.st='ok';},2500+Math.random()*2000);}
+  }
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────
+function el(id){return document.getElementById(id);}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded',()=>{
+  log('ok','Go2 Platform UI v2.0 — initializing');
+  log('info','Architecture: UI → REST/WS → Backend → ROS2 → Hardware');
+  log('info','Safety enforced at backend — UI is API consumer only');
+  loadBuiltinBehaviors(); renderBehaviors();
+  loadObjects(); loadMissions(); renderNodes();
+  renderLangGrid();
+  renderAnimClipList();
+  setInterval(simLoop, 220);
+  setInterval(drawBT, 1000);
+  setInterval(()=>{ if(el('tab-metrics').classList.contains('active')) loadMetrics(); }, 5000);
+  setConn('warn','Connecting…');
+  setTimeout(()=>{
+    if(el('api-url')) P.apiBase=el('api-url').value;
+    connectWS();
+  }, 800);
+  drawRobot(P.telemetry);
+  drawAnimCanvas();
+  drawBT();
+});
+</script>
+</body>
+</html>
