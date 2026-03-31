@@ -1,0 +1,47 @@
+{
+  "_comment": "UndercarriagePayload plugin default configuration. Override via /payload/attach endpoint.",
+  "payload": {
+    "name": "silicone_substructure_v1",
+    "description": "Silicone belly pad — tactile + protective",
+    "material": "silicone",
+    "mass_kg": 1.5,
+    "thickness_m": 0.050,
+    "length_m": 0.300,
+    "width_m": 0.200,
+    "has_tactile_sensor": true,
+    "has_thermal_sensor": false,
+    "desired_clearance_m": 0.025
+  },
+  "behaviors": {
+    "ground_scout": {
+      "cooldown_s": 120,
+      "default_duration_s": 8.0,
+      "trigger_curiosity_threshold": 0.5
+    },
+    "belly_contact": {
+      "default_hold_s": 3.0,
+      "max_hold_s": 60.0
+    },
+    "thermal_rest": {
+      "default_duration_s": 30.0,
+      "max_duration_s": 300.0,
+      "trigger_boredom_threshold": 0.6
+    },
+    "object_nudge": {
+      "default_nudge_speed": 0.08,
+      "default_nudge_dist_m": 0.12,
+      "trigger_playfulness_threshold": 0.7
+    },
+    "substrate_scan": {
+      "default_cols": 3,
+      "default_col_width_m": 0.10,
+      "default_row_len_m": 0.30
+    }
+  },
+  "safety": {
+    "drag_speed_threshold_ms": 0.02,
+    "restore_speed_ms": 0.008,
+    "scan_speed_ms": 0.04,
+    "nudge_max_speed_ms": 0.12
+  }
+}
