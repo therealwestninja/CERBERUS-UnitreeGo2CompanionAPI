@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CERBERUS Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<style>
+:root {
+  --bg:      #0d1117;
+  --surface: #161b22;
+  --border:  #30363d;
+  --text:    #e6edf3;
+  --muted:   #8b949e;
+  --accent:  #58a6ff;
+  --green:   #3fb950;
+  --yellow:  #d29922;
+  --red:     #f85149;
+  --orange:  #fb8500;
+  --amber:   #e6a817;
+  --radius:  8px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  min-height: 100vh;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topbar-logo {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--accent);
+}
+.topbar-version { color: var(--muted); font-size: 11px; }
+.dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.dot-green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.dot-red    { background: var(--red); }
+.dot-yellow { background: var(--yellow); }
+.status-text { font-size: 12px; }
+.spacer { flex: 1; }
+.estop-btn {
+  background: var(--red);
+  color: white;
+  border: none;
+  padding: 6px 18px;
+  border-radius: var(--radius);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: opacity 0.15s;
+}
+.estop-btn:hover { opacity: 0.85; }
+.estop-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 220px 1fr 240px;
+  grid-template-rows: auto auto 1fr;
+  gap: 12px;
+  padding: 12px;
+  min-height: calc(100vh - 48px);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+.card-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+.metric { margin-bottom: 8px; }
+.metric-label { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+.metric-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.metric-unit { font-size: 12px; color: var(--muted); margin-left: 3px; }
+.metric-small {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-outer {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.bar-inner {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.imu-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.imu-gauge {
+  flex: 1;
+  text-align: center;
+}
+.imu-label { font-size: 9px; color: var(--muted); margin-bottom: 2px; }
+.imu-value {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Velocity panel */
+.vel-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+.vel-item { text-align: center; }
+.vel-bar-container {
+  width: 100%;
+  height: 50px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.vel-track {
+  width: 4px;
+  height: 100%;
+  background: var(--border);
+  border-radius: 2px;
+  position: relative;
+}
+.vel-fill {
+  position: absolute;
+  width: 4px;
+  left: 0;
+  border-radius: 2px;
+  transition: all 0.2s;
+}
+
+/* Mode badge */
+.mode-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.mode-trotting  { background: #1f4a1f; color: var(--green); }
+.mode-standing  { background: #1a3555; color: var(--accent); }
+.mode-estop     { background: #4a1414; color: var(--red); }
+.mode-nominal   { background: #1c2a1c; color: #88c988; }
+.mode-other     { background: #2a2a1a; color: var(--yellow); }
+
+/* Control buttons */
+.btn-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.btn-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+.ctrl-btn {
+  padding: 7px 4px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #1c2128;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ctrl-btn:hover { background: #21262d; border-color: var(--accent); }
+.ctrl-btn:active { background: #161b22; }
+.ctrl-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ctrl-btn.warn { border-color: var(--orange); color: var(--orange); }
+.ctrl-btn.warn:hover { background: #2a1800; }
+
+/* Joystick */
+.joystick-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 8px 0;
+}
+.joy-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.joy-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #1c2128;
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s;
+  user-select: none;
+}
+.joy-btn:hover { background: #21262d; border-color: var(--accent); }
+.joy-btn:active, .joy-btn.active { background: #1f3a5a; border-color: var(--accent); }
+.joy-center {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: #21262d;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* Plugin panel */
+.plugin-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.plugin-row:last-child { border-bottom: none; }
+.plugin-name { font-weight: 600; font-size: 11px; flex: 1; }
+.plugin-state { font-size: 10px; color: var(--muted); }
+.plugin-btns { display: flex; gap: 4px; }
+.pill-btn {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pill-btn:hover { border-color: var(--accent); color: var(--accent); }
+.pill-btn.active { border-color: var(--green); color: var(--green); background: #0d2a1a; }
+
+/* Event log */
+.event-log {
+  grid-column: 1 / -1;
+  height: 150px;
+  overflow-y: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+}
+.event-log::-webkit-scrollbar { width: 4px; }
+.event-log::-webkit-scrollbar-track { background: transparent; }
+.event-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.log-entry {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+  border-bottom: 1px solid #1c2128;
+}
+.log-time { color: var(--muted); min-width: 68px; }
+.log-type { min-width: 70px; font-weight: 600; }
+.log-type.state   { color: var(--accent); }
+.log-type.terrain { color: #76c98a; }
+.log-type.stair   { color: var(--yellow); }
+.log-type.limb    { color: var(--orange); }
+.log-type.voice   { color: #c792ea; }
+.log-type.safety  { color: var(--red); }
+.log-type.payload { color: #56b6c2; }
+.log-msg { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Special panels */
+.limb-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.limb-cell {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+.limb-ok    { border-color: var(--green);  color: var(--green);  background: #0d2a1a; }
+.limb-dead  { border-color: var(--red);    color: var(--red);    background: #2a0d0d; }
+.limb-warn  { border-color: var(--yellow); color: var(--yellow); background: #2a200d; }
+.limb-neutral { border-color: var(--border); color: var(--muted); }
+
+.section-col { display: flex; flex-direction: column; gap: 12px; }
+.main-col    { display: flex; flex-direction: column; gap: 12px; }
+
+/* Voice */
+.voice-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+}
+.voice-listening { background: #1a1a4a; color: var(--accent); }
+.voice-idle      { background: #1c2128; color: var(--muted); }
+
+/* Alert banner */
+.alert-banner {
+  grid-column: 1 / -1;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: pulse 2s infinite;
+}
+.alert-estop  { background: #3a0f0f; border: 1px solid var(--red); color: var(--red); }
+.alert-limb   { background: #2a1800; border: 1px solid var(--orange); color: var(--orange); }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.7; } }
+
+/* Terrain indicator */
+.terrain-chip {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.terrain-FLAT         { background: #1a2f1a; color: #76e676; }
+.terrain-ROUGH        { background: #2f2a1a; color: #e6c876; }
+.terrain-SOFT         { background: #1a2a2f; color: #76c9e6; }
+.terrain-INCLINE_UP   { background: #2a1f1a; color: var(--orange); }
+.terrain-INCLINE_DOWN { background: #1f2a2a; color: #76b4e6; }
+.terrain-LATERAL_SLOPE{ background: #2a1a2a; color: #c976e6; }
+.terrain-unknown      { background: #1c2128; color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+const API = window.location.origin;
+const WS_URL = `ws://${window.location.host}/ws`;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+const fmt1   = v => (v ?? 0).toFixed(1);
+const fmt2   = v => (v ?? 0).toFixed(2);
+const deg    = r => ((r ?? 0) * 180 / Math.PI).toFixed(1);
+const clamp  = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const pct    = (v, max) => clamp(((v ?? 0) / max) * 100, 0, 100);
+
+function fmtTime(ts) {
+  const d = new Date(ts);
+  return d.toTimeString().slice(0, 8);
+}
+
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(`${API}${path}`, opts).catch(e => ({ ok: false, _err: e }));
+  if (r._err) return null;
+  return r.ok ? r.json().catch(() => null) : null;
+}
+
+// ── Battery gauge ─────────────────────────────────────────────────────────────
+
+function Battery({ pct: p }) {
+  const color = p > 40 ? 'var(--green)' : p > 15 ? 'var(--yellow)' : 'var(--red)';
+  return (
+    <div className="metric">
+      <div className="metric-label">BATTERY</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+        <span className="metric-value" style={{ color }}>{(p ?? 0).toFixed(0)}</span>
+        <span className="metric-unit">%</span>
+      </div>
+      <div className="bar-outer">
+        <div className="bar-inner" style={{ width: `${p ?? 0}%`, background: color }} />
+      </div>
+    </div>
+  );
+}
+
+// ── Velocity bar ──────────────────────────────────────────────────────────────
+
+function VelBar({ label, value, max }) {
+  const norm  = clamp(value / max, -1, 1);
+  const pct   = Math.abs(norm) * 50;
+  const top   = norm < 0 ? 50 : 50 - pct;
+  const color = Math.abs(value) < 0.01 ? 'var(--border)' : 'var(--accent)';
+  return (
+    <div className="vel-item">
+      <div className="metric-label" style={{ textAlign: 'center' }}>{label}</div>
+      <div className="vel-bar-container">
+        <div className="vel-track">
+          <div style={{ background: 'var(--border)', width: '100%', height: '100%', position: 'relative' }}>
+            <div style={{
+              position: 'absolute', width: 4, background: color,
+              top: `${top}%`, height: `${pct}%`, borderRadius: 2,
+              transition: 'all 0.2s',
+            }} />
+          </div>
+        </div>
+      </div>
+      <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+        {fmt2(value)}
+      </div>
+    </div>
+  );
+}
+
+// ── IMU gauge ─────────────────────────────────────────────────────────────────
+
+function ImuRow({ roll, pitch, yaw }) {
+  const color = (v, limit) => Math.abs(v) > limit * 0.7 ? 'var(--yellow)' : 'var(--text)';
+  return (
+    <div className="imu-row">
+      {[['ROLL', roll, 30], ['PITCH', pitch, 25], ['YAW', yaw, 180]].map(([l, v, lim]) => (
+        <div className="imu-gauge" key={l}>
+          <div className="imu-label">{l}</div>
+          <div className="imu-value" style={{ color: color(v ?? 0, lim) }}>
+            {deg(v)}°
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Leg status grid ────────────────────────────────────────────────────────────
+
+function LimbGrid({ missing, fractions }) {
+  const legs = ['FL', 'FR', 'RL', 'RR'];
+  return (
+    <div className="limb-grid">
+      {legs.map(leg => {
+        const frac = fractions?.[leg] ?? 0;
+        const isDead  = leg === missing;
+        const isWarn  = !isDead && frac > 0.5;
+        const cls = isDead ? 'limb-dead' : isWarn ? 'limb-warn' : 'limb-ok';
+        return (
+          <div key={leg} className={`limb-cell ${cls}`}>
+            {leg}
+            {isDead && <div style={{ fontSize: 9, marginTop: 2 }}>LOST</div>}
+            {!isDead && frac > 0.3 && <div style={{ fontSize: 9, marginTop: 2 }}>{(frac*100).toFixed(0)}%</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Plugin row ────────────────────────────────────────────────────────────────
+
+function PluginRow({ name, enabled, state, onEnable, onDisable }) {
+  const statusColor = enabled ? 'var(--green)' : 'var(--muted)';
+  return (
+    <div className="plugin-row">
+      <div className="dot" style={{ background: enabled ? 'var(--green)' : 'var(--border)' }} />
+      <div style={{ flex: 1 }}>
+        <div className="plugin-name">{name}</div>
+        {state && <div className="plugin-state">{state}</div>}
+      </div>
+      <div className="plugin-btns">
+        <button className={`pill-btn ${enabled ? 'active' : ''}`} onClick={() => onEnable(name)}>ON</button>
+        <button className="pill-btn" onClick={() => onDisable(name)}>OFF</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Log entry ─────────────────────────────────────────────────────────────────
+
+function LogEntry({ entry }) {
+  const typeMap = {
+    state: 'state', terrain: 'terrain', stair: 'stair',
+    limb_loss: 'limb', voice: 'voice', payload: 'payload',
+    safety: 'safety',
+  };
+  const cls = typeMap[entry.type] || 'state';
+  return (
+    <div className="log-entry">
+      <span className="log-time">{entry.time}</span>
+      <span className={`log-type ${cls}`}>{entry.type}</span>
+      <span className="log-msg">{entry.msg}</span>
+    </div>
+  );
+}
+
+// ── Main dashboard ────────────────────────────────────────────────────────────
+
+function Dashboard() {
+  const [connected, setConnected]   = useState(false);
+  const [state, setState]           = useState({});
+  const [plugins, setPlugins]       = useState([]);
+  const [terrain, setTerrain]       = useState(null);
+  const [stair, setStair]           = useState(null);
+  const [limbLoss, setLimbLoss]     = useState(null);
+  const [voice, setVoice]           = useState(null);
+  const [log, setLog]               = useState([]);
+  const [version, setVersion]       = useState('2.7.0');
+  const wsRef                       = useRef(null);
+  const reconnectRef                = useRef(null);
+  const logRef                      = useRef(null);
+
+  const pushLog = useCallback((type, msg) => {
+    setLog(prev => {
+      const entry = { type, msg: String(msg), time: fmtTime(Date.now()), id: Date.now() + Math.random() };
+      const next = [...prev.slice(-199), entry];
+      setTimeout(() => logRef.current?.scrollTo(0, logRef.current.scrollHeight), 50);
+      return next;
+    });
+  }, []);
+
+  // ── WebSocket ───────────────────────────────────────────────────────────────
+
+  const connectWS = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    const ws = new WebSocket(WS_URL);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      setConnected(true);
+      pushLog('state', 'WebSocket connected');
+      clearTimeout(reconnectRef.current);
+    };
+
+    ws.onmessage = e => {
+      try {
+        const { type, data } = JSON.parse(e.data);
+        if (type === 'state')     { setState(data); }
+        if (type === 'terrain')   { setTerrain(data); }
+        if (type === 'stair')     { setStair(data); }
+        if (type === 'limb_loss') { setLimbLoss(data); }
+        if (type === 'voice')     { setVoice(v => ({ ...v, ...data })); pushLog('voice', JSON.stringify(data)); }
+        if (type === 'payload')   { pushLog('payload', JSON.stringify(data)); }
+        if (type !== 'ping' && type !== 'state') {
+          pushLog(type, JSON.stringify(data).slice(0, 120));
+        }
+      } catch {}
+    };
+
+    ws.onclose = () => {
+      setConnected(false);
+      pushLog('safety', 'WebSocket disconnected — reconnecting…');
+      reconnectRef.current = setTimeout(connectWS, 3000);
+    };
+
+    ws.onerror = () => ws.close();
+  }, [pushLog]);
+
+  // ── Initial data load ────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    connectWS();
+
+    // Fetch plugin list and version
+    api('GET', '/').then(d => d?.version && setVersion(d.version));
+    api('GET', '/plugins').then(d => Array.isArray(d) && setPlugins(d));
+    api('GET', '/terrain').then(d => d && setTerrain(d)).catch(() => {});
+    api('GET', '/stair').then(d => d && setStair(d)).catch(() => {});
+    api('GET', '/limb_loss').then(d => d && setLimbLoss(d)).catch(() => {});
+    api('GET', '/voice').then(d => d && setVoice(d)).catch(() => {});
+
+    // Refresh plugin list every 10s
+    const timer = setInterval(() => {
+      api('GET', '/plugins').then(d => Array.isArray(d) && setPlugins(d));
+    }, 10000);
+
+    return () => { clearInterval(timer); wsRef.current?.close(); };
+  }, [connectWS]);
+
+  // ── Controls ─────────────────────────────────────────────────────────────────
+
+  const estop     = () => api('POST', '/safety/estop').then(() => pushLog('safety', '⚡ E-STOP triggered'));
+  const clearEstop= () => api('POST', '/safety/clear_estop');
+  const sport     = m  => api('POST', '/motion/sport_mode', { mode: m }).then(() => pushLog('state', `sport: ${m}`));
+  const move      = (vx, vy, vyaw) => api('POST', '/motion/move', { vx, vy, vyaw });
+  const stopMove  = () => api('POST', '/motion/stop');
+
+  const enablePlugin  = name => api('POST', `/plugins/${name}/enable`).then(() =>
+    api('GET', '/plugins').then(d => Array.isArray(d) && setPlugins(d)));
+  const disablePlugin = name => api('POST', `/plugins/${name}/disable`).then(() =>
+    api('GET', '/plugins').then(d => Array.isArray(d) && setPlugins(d)));
+
+  // Joystick hold-to-move
+  const joyIntervalRef = useRef(null);
+  const joyDown = (vx, vy, vyaw) => {
+    move(vx, vy, vyaw);
+    joyIntervalRef.current = setInterval(() => move(vx, vy, vyaw), 200);
+  };
+  const joyUp = () => {
+    clearInterval(joyIntervalRef.current);
+    stopMove();
+  };
+
+  // ── Derived state ─────────────────────────────────────────────────────────────
+
+  const bat      = state.battery?.percent ?? 100;
+  const mode     = state.mode ?? 'unknown';
+  const estopActive = state.estop_active;
+  const limb     = limbLoss?.limb_loss ?? limbLoss;
+  const limbMissing = limb?.missing_leg;
+  const stairState  = stair?.stair?.state ?? stair?.state;
+  const terrainClass= terrain?.terrain?.current ?? terrain?.current;
+  const voiceStatus = voice?.voice ?? voice;
+
+  const modeClass = mode.includes('trot') ? 'mode-trotting'
+    : mode.includes('stand') ? 'mode-standing'
+    : estopActive ? 'mode-estop'
+    : 'mode-other';
+
+  return (
+    <div>
+      {/* Top bar */}
+      <div className="topbar">
+        <span className="topbar-logo">CERBERUS</span>
+        <span className="topbar-version">v{version}</span>
+        <span className="dot" style={{ background: connected ? 'var(--green)' : 'var(--red)', boxShadow: connected ? '0 0 6px var(--green)' : 'none' }} />
+        <span className="status-text" style={{ color: connected ? 'var(--green)' : 'var(--red)' }}>
+          {connected ? 'Connected' : 'Disconnected'}
+        </span>
+        <span className="spacer" />
+        {estopActive && <span style={{ color: 'var(--red)', fontWeight: 700, fontSize: 12, animation: 'pulse 1s infinite' }}>⚠ E-STOP ACTIVE</span>}
+        <button className="estop-btn" onClick={estop}>🛑 E-STOP</button>
+        {estopActive && <button className="ctrl-btn" onClick={clearEstop} style={{ fontSize: 10 }}>Clear (Sim)</button>}
+      </div>
+
+      <div className="layout">
+        {/* Alert banners */}
+        {estopActive && (
+          <div className="alert-banner alert-estop" style={{ gridColumn: '1/-1' }}>
+            🛑 EMERGENCY STOP ACTIVE — All motion halted. Clear via POST /safety/clear_estop (simulation only).
+          </div>
+        )}
+        {limbMissing && (
+          <div className="alert-banner alert-limb" style={{ gridColumn: '1/-1' }}>
+            🦴 LIMB LOSS DETECTED — {limbMissing} leg non-functional. Tripod recovery gait active.
+            &nbsp;<button className="ctrl-btn" style={{ fontSize: 10 }}
+              onClick={() => api('POST', '/limb_loss/clear').then(() => setLimbLoss(null))}>
+              Clear
+            </button>
+          </div>
+        )}
+
+        {/* ── LEFT COLUMN: Robot state ── */}
+        <div className="section-col">
+          <div className="card">
+            <div className="card-title">Robot State</div>
+            <Battery pct={bat} />
+            <div className="metric">
+              <div className="metric-label">MODE</div>
+              <span className={`mode-badge ${modeClass}`}>{mode}</span>
+            </div>
+            <div className="metric">
+              <div className="metric-label">BODY HEIGHT</div>
+              <span className="metric-small">{fmt2(state.body_height ?? 0.27)}</span>
+              <span className="metric-unit">m</span>
+            </div>
+            <div className="metric">
+              <div className="metric-label">VOLTAGE</div>
+              <span className="metric-small">{fmt1(state.battery?.voltage ?? 34.0)}</span>
+              <span className="metric-unit">V</span>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-title">IMU</div>
+            <ImuRow roll={state.roll} pitch={state.pitch} yaw={state.yaw} />
+            <div style={{ marginTop: 8 }}>
+              <div className="metric-label">ACCELEROMETER</div>
+              <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                X {fmt2(state.imu_acc_x ?? 0)}&nbsp;&nbsp;Y {fmt2(state.imu_acc_y ?? 0)}&nbsp;&nbsp;Z {fmt2(state.imu_acc_z ?? -9.81)}
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-title">Limb Status</div>
+            <LimbGrid
+              missing={limbMissing}
+              fractions={limb?.leg_fractions}
+            />
+            {limbMissing && (
+              <div style={{ marginTop: 8, fontSize: 10, color: 'var(--orange)' }}>
+                Tripod: {limb?.tripod_params?.description}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── CENTRE COLUMN: Controls ── */}
+        <div className="main-col">
+          <div className="card">
+            <div className="card-title">Velocity</div>
+            <div className="vel-grid">
+              <VelBar label="FWD (vx)"  value={state.velocity_x   ?? 0} max={1.5} />
+              <VelBar label="LAT (vy)"  value={state.velocity_y   ?? 0} max={0.8} />
+              <VelBar label="YAW (ω)"   value={state.velocity_yaw ?? 0} max={2.0} />
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-title">Motion Control</div>
+            <div className="joystick-wrap">
+              <div className="joy-row">
+                <div style={{ width: 38 }} />
+                <button className="joy-btn" title="Forward"
+                  onMouseDown={() => joyDown(0.25, 0, 0)} onMouseUp={joyUp} onMouseLeave={joyUp}>▲</button>
+                <div style={{ width: 38 }} />
+              </div>
+              <div className="joy-row">
+                <button className="joy-btn" title="Turn left"
+                  onMouseDown={() => joyDown(0, 0, 0.4)} onMouseUp={joyUp} onMouseLeave={joyUp}>↺</button>
+                <button className="joy-btn" title="Left"
+                  onMouseDown={() => joyDown(0, 0.2, 0)} onMouseUp={joyUp} onMouseLeave={joyUp}>◄</button>
+                <button className="joy-center" onClick={stopMove}>■</button>
+                <button className="joy-btn" title="Right"
+                  onMouseDown={() => joyDown(0, -0.2, 0)} onMouseUp={joyUp} onMouseLeave={joyUp}>►</button>
+                <button className="joy-btn" title="Turn right"
+                  onMouseDown={() => joyDown(0, 0, -0.4)} onMouseUp={joyUp} onMouseLeave={joyUp}>↻</button>
+              </div>
+              <div className="joy-row">
+                <div style={{ width: 38 }} />
+                <button className="joy-btn" title="Back"
+                  onMouseDown={() => joyDown(-0.2, 0, 0)} onMouseUp={joyUp} onMouseLeave={joyUp}>▼</button>
+                <div style={{ width: 38 }} />
+              </div>
+            </div>
+            <div className="btn-grid" style={{ marginTop: 8 }}>
+              <button className="ctrl-btn" onClick={() => api('POST', '/motion/stand_up')}>↑ Stand Up</button>
+              <button className="ctrl-btn" onClick={() => api('POST', '/motion/stand_down')}>↓ Lie Down</button>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-title">Sport Modes</div>
+            <div className="btn-grid btn-grid-3">
+              {['hello','sit','stretch','dance1','dance2','wallow','scrape','rise_sit','finger_heart',
+                'balance_stand','front_pounce'].map(m => (
+                <button key={m} className="ctrl-btn" onClick={() => sport(m)}>{m}</button>
+              ))}
+              <button className="ctrl-btn warn" onClick={() => sport('front_flip')}>⚠ flip</button>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-title">Terrain &amp; Stair</div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div>
+                <div className="metric-label">TERRAIN</div>
+                <span className={`terrain-chip terrain-${terrainClass ?? 'unknown'}`}>
+                  {terrainClass ?? '—'}
+                </span>
+              </div>
+              <div>
+                <div className="metric-label">STAIR FSM</div>
+                <span className="mode-badge mode-nominal" style={{ fontSize: 10 }}>
+                  {stairState ?? '—'}
+                </span>
+              </div>
+              {stair?.stair?.score !== undefined && (
+                <div>
+                  <div className="metric-label">SCORE</div>
+                  <span className="metric-small">{(stair.stair.score * 100).toFixed(0)}%</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── RIGHT COLUMN: Plugins + Voice ── */}
+        <div className="section-col">
+          <div className="card">
+            <div className="card-title">Plugins ({plugins.length})</div>
+            {plugins.length === 0 && <div style={{ color: 'var(--muted)', fontSize: 11 }}>No plugins loaded</div>}
+            {plugins.map(p => (
+              <PluginRow
+                key={p.name}
+                name={p.name}
+                enabled={p.enabled !== false}
+                state={p.version}
+                onEnable={enablePlugin}
+                onDisable={disablePlugin}
+              />
+            ))}
+          </div>
+
+          {voiceStatus && (
+            <div className="card">
+              <div className="card-title">Voice NLU</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span className={`voice-badge ${voiceStatus.listening ? 'voice-listening' : 'voice-idle'}`}>
+                  {voiceStatus.listening ? '🎤 Listening' : '🎙 Idle'}
+                </span>
+              </div>
+              <div className="metric-label">Model: {voiceStatus.model}</div>
+              {voiceStatus.last_transcript && (
+                <div style={{ marginTop: 6, padding: '4px 8px', background: '#161b22', borderRadius: 4, fontSize: 11, fontStyle: 'italic', color: 'var(--muted)' }}>
+                  "{voiceStatus.last_transcript}"
+                </div>
+              )}
+              {voiceStatus.last_intent && (
+                <div style={{ marginTop: 4, fontSize: 11 }}>
+                  → <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{voiceStatus.last_intent}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                <button className="ctrl-btn" style={{ flex: 1 }}
+                  onClick={() => api('POST', '/voice/listen/start').then(() => setVoice(v => ({ ...v, voice: { ...(v?.voice ?? v), listening: true } })))}>
+                  Start
+                </button>
+                <button className="ctrl-btn" style={{ flex: 1 }}
+                  onClick={() => api('POST', '/voice/listen/stop').then(() => setVoice(v => ({ ...v, voice: { ...(v?.voice ?? v), listening: false } })))}>
+                  Stop
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="card">
+            <div className="card-title">Limb Loss Control</div>
+            <div className="btn-grid">
+              {['FL', 'FR', 'RL', 'RR'].map(leg => (
+                <button key={leg} className={`ctrl-btn ${limbMissing === leg ? 'warn' : ''}`}
+                  onClick={() => api('POST', '/limb_loss/declare', { leg }).then(() =>
+                    api('GET', '/limb_loss').then(d => d && setLimbLoss(d)))}>
+                  Declare {leg}
+                </button>
+              ))}
+            </div>
+            <button className="ctrl-btn" style={{ marginTop: 6, width: '100%' }}
+              onClick={() => api('POST', '/limb_loss/clear').then(() => setLimbLoss(null))}>
+              Clear Tripod Mode
+            </button>
+            <div style={{ marginTop: 6 }}>
+              <div className="metric-label">SIM INJECTION</div>
+              <div className="btn-grid" style={{ marginTop: 4 }}>
+                {['FL', 'FR', 'RL', 'RR'].map(leg => (
+                  <button key={leg} className="ctrl-btn" style={{ fontSize: 9 }}
+                    onClick={() => api('POST', '/sim/limb_loss', { leg })}>
+                    Sim {leg}
+                  </button>
+                ))}
+              </div>
+              <button className="ctrl-btn" style={{ marginTop: 4, width: '100%', fontSize: 9 }}
+                onClick={() => api('POST', '/sim/limb_loss', { leg: null })}>
+                Clear Sim
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── FULL WIDTH: Event Log ── */}
+        <div className="card event-log" ref={logRef} style={{ gridColumn: '1/-1' }}>
+          <div className="card-title" style={{ position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 1 }}>
+            Event Log ({log.length})
+          </div>
+          {log.length === 0 && (
+            <div style={{ color: 'var(--muted)', padding: '8px 0', fontSize: 11 }}>Waiting for events…</div>
+          )}
+          {[...log].reverse().map(e => <LogEntry key={e.id} entry={e} />)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Dashboard />);
+</script>
+</body>
+</html>

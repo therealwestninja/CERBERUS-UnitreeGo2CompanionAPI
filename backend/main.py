@@ -428,7 +428,7 @@ async def get_stats():
     return eng.stats.to_dict()
 
 @app.get("/anatomy")
-@app.get("/api/v1/robot/anatomy")
+ @app.get("/api/v1/robot/anatomy")
 async def get_anatomy():
     eng = _require_engine()
     if eng.anatomy is None:
@@ -436,7 +436,7 @@ async def get_anatomy():
     return eng.anatomy.status()
 
 @app.get("/terrain")
-@app.get("/api/v1/robot/terrain")
+ @app.get("/api/v1/robot/terrain")
 async def get_terrain():
     if plugin_manager is None:
         raise HTTPException(503, "Plugin manager not ready")
@@ -447,13 +447,13 @@ async def get_terrain():
     return terrain_plugin
 
 
-def _require_stair_plugin():
+ def _require_stair_plugin():
     if plugin_manager is None:
         raise HTTPException(503, "Plugin manager not ready")
     for rec in plugin_manager._plugins.values():
         if rec.plugin.__class__.__name__ == "StairClimberPlugin":
             return rec.plugin
-    raise HTTPException(404, "StairClimberPlugin not loaded. Ensure plugins/stair_climber/ is in PLUGIN_DIRS.")
+     raise HTTPException(404, "StairClimberPlugin not loaded. Ensure plugins/stair_climber/ is in PLUGIN_DIRS.")
 
 
 @app.get("/stair")
