@@ -1,0 +1,1 @@
+Expected third-party SDK archives for local integration work:\n\n- Docs/go2_ros2_sdk.zip\n- Docs/luci-ros2-sdk.zip\n\nThese archives are expected to be committed to the repository so the CERBERUS API integration layer can inspect and adapt to their ROS2 interfaces without relying on external network fetches at runtime.\n
