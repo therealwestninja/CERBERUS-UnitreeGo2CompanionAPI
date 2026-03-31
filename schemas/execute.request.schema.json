@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Plugin Execute Request",
+  "type": "object",
+  "required": ["action"],
+  "properties": {
+    "action": { "type": "string" },
+    "params": { "type": "object", "additionalProperties": true },
+    "request_id": { "type": "string" }
+  }
+}
